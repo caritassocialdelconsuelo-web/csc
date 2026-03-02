@@ -1,61 +1,11 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# quasar.js
-package-lock.json
-yarn-error.log
-yarn.lock
-npm-debug.log
-# Quasar core related directories
-/.quasar/
-/.quasar/**/ */
-/dist/
-/dist/**/ */
-/quasar.config.*.temporary.compiled*
-
-
-# production
-/build
-
-# misc
 .DS_Store
-*.pem
+.thumbs.db
+node_modules
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
-.env
-/**/ */.env
-/**/ */.env.local
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# Editor directories and files
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
+# Quasar core related directories
+.quasar
+/dist
+/quasar.config.*.temporary.compiled*
 
 # Cordova related directories and files
 /src-cordova/node_modules
@@ -67,7 +17,17 @@ next-env.d.ts
 /src-capacitor/www
 /src-capacitor/node_modules
 
-# BEX related directories and files
-/src-bex/www
-/src-bex/js/core
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
+# Editor directories and files
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# local .env files
+.env.local*
