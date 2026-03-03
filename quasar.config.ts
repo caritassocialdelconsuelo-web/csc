@@ -75,11 +75,12 @@ export default defineConfig((/* ctx */) => {
           { server: false },
         ],
       ],
+      useFilenameHashes: false,
     },
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
-      // https: true,
+      https: true,
       open: true, // opens browser window automatically
     },
 
