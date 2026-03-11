@@ -1,0 +1,612 @@
+/* eslint-disable @typescript-eslint/no-this-alias */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type {
+  Transaction,
+  CreatingHookContext,
+  DeletingHookContext,
+  UpdatingHookContext,
+  Collection,
+  WhereClause,
+} from 'dexie';
+import Dexie, { type Table } from 'dexie';
+
+const registeredEntitys: { [key: string]: typeof SlapBaseEntity } = {};
+
+export function Entity<T extends new (...args: any[]) => any>(constructor: T) {
+  const claseEntidadHija = class extends constructor {
+    constructor(...args: any[]) {
+      super(...args); // 1. Llama al constructor original (Madre + Hija)
+      // 2. En este punto, los campos de la Hija ya se inicializaron.
+      // Si el primer argumento es el objeto 'data', lo aplicamos ahora.
+      const data = args[0];
+      this.initializeMyData(data);
+    }
+  };
+
+  registeredEntitys[constructor.name] = claseEntidadHija as unknown as typeof SlapBaseEntity;
+  console.log(`Se ha registrado la clase: ${constructor.name}`);
+  return claseEntidadHija;
+}
+
+export function Column(target: any, key: string) {
+  // Obtenemos o inicializamos la lista de columnas en el prototipo
+  const MiClase = target.constructor as SlapBaseEntity;
+  MiClase._columns.push(key);
+
+  // Guardamos la lista en el constructor para que sea accesible
+  //target.constructor._columns = columns;
+}
+
+//Clase base para todas las entidades con ID generado por UUID
+
+export abstract class SlapBaseEntity {
+  static _columns = [];
+  static table: Table<any, any>;
+  [key: string]: any; //Define un diccionario dinámico para la clase
+  @Column
+  id?: string;
+
+  static schema = 'id';
+
+  //Constructor genérico
+  constructor(data?: Partial<SlapBaseEntity>) {
+    try {
+      this.initializeMyData(data);
+    } catch (error) {
+      console.log(
+        `Error en constructor() de ${this.getThisClass().name}:`,
+        error,
+        'data==>',
+        JSON.stringify(this),
+      );
+    }
+  }
+  initializeMyData(data: any) {
+    if (data && typeof data === 'object') {
+      //Solo copia datamembers que tenga yo
+      Object.assign(
+        this,
+        Object.fromEntries(Object.entries(data).filter(([key, value]) => Object.hasOwn(this, key))),
+      );
+    }
+  }
+  //Metodos estaticos de la clase base para todas las entidades (colecciones)
+  // --- MÉTODOS ESTÁTICOS (Proxy de Table) ---
+
+  // Lectura
+  static async get(id: any) {
+    try {
+      return await this.table.get(id);
+    } catch (error) {
+      console.log(`Error en get() de ${this.name}:`, error);
+    }
+  }
+
+  static async all() {
+    try {
+      return await this.table.toArray();
+    } catch (error) {
+      console.log(`Error en all() de ${this.name}:`, error);
+    }
+  }
+
+  static async count(): Promise<number | undefined> {
+    try {
+      return await this.table.count();
+    } catch (error) {
+      console.log(`Error en count() de ${this.name}:`, error);
+    }
+  }
+
+  // Escritura Masiva
+  static async bulkAdd(entities: any[]) {
+    try {
+      return await this.table.bulkAdd(entities);
+    } catch (error) {
+      console.log(`Error en bulkAdd(entities: any[]) de ${this.name}:`, error);
+    }
+  }
+
+  static async bulkPut(entities: any[]) {
+    try {
+      return await this.table.bulkPut(entities);
+    } catch (error) {
+      console.log(`Error en bulkPut(entities: any[]) de ${this.name}:`, error);
+    }
+  }
+
+  static async bulkDelete(ids: any[]) {
+    try {
+      return await this.table.bulkDelete(ids);
+    } catch (error) {
+      console.log(`Error en bulkDelete(ids: any[]) de ${this.name}:`, error);
+    }
+  }
+
+  // Limpieza
+  static async clear() {
+    try {
+      return await this.table.clear();
+    } catch (error) {
+      console.log(`Error en clear() de ${this.name}:`, error);
+    }
+  }
+
+  // Consultas Rápidas
+  static where(index: string) {
+    try {
+      return this.table.where(index);
+    } catch (error) {
+      console.log(`Error en where(index: string) de ${this.name}:`, error);
+    }
+  }
+
+  static orderBy(index: string) {
+    try {
+      return this.table.orderBy(index);
+    } catch (error) {
+      console.log(`Error en orderBy(index: string) de ${this.name}:`, error);
+    }
+  }
+
+  // Métodos personalizados de tu lógica SlapDb
+  static async filterByEstado(estado: string) {
+    try {
+      return await this.table.where('estado').equals(estado).toArray();
+    } catch (error) {
+      console.log(`Error en filterByEstado de ${this.name}:`, error);
+    }
+  }
+
+  // Método estático universal para contar registros
+  static async contar(): Promise<number | undefined> {
+    try {
+      return await this.table.count();
+    } catch (error) {
+      console.log(`Error en contar() de ${this.name}:`, error);
+    }
+  }
+  //Metodos estaticos de ayuda
+  static getAt() {
+    return Date.now();
+  }
+  //Metodos Staticos para Hooks
+  static hookCreating = (
+    hookContext: CreatingHookContext<any, any>,
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) => {
+    try {
+      hookContext.onerror = (error) =>
+        console.log(`Error en hookCreate() -hookConext- de ${this.name}:`, error);
+      obj.id = crypto.randomUUID(); //Genera una clave única
+    } catch (error) {
+      console.log(`Error en hookCreate() de ${this.name}:`, error);
+    }
+  };
+  static hookDeleting = (
+    hookContext: CreatingHookContext<any, any>,
+    primKey: any,
+    obj: { id: any },
+    transaction: Transaction,
+  ) => {
+    try {
+      hookContext.onsuccess = (primKey) => console.log('Borrado Succes con PK:', primKey);
+      hookContext.onerror = (error) =>
+        console.log(`Error en hookCreate() -hookContext- de ${this.name}:`, error);
+    } catch (error) {
+      console.log(`Error en hookCreate() de ${this.name}:`, error);
+    }
+  };
+
+  static hookUpdating = (
+    hookContext: UpdatingHookContext<any, any>,
+    modifications: any,
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) => {
+    try {
+      hookContext.onsuccess = (primKey) => console.log('Updating Succes con PK:', primKey);
+      hookContext.onerror = (error) =>
+        console.log(`Error en hookUpdating() -hookContext- de ${this.name}:`, error);
+    } catch (error) {
+      console.log(`Error en hookUpdating() de ${this.name}:`, error);
+    }
+  };
+
+  static hookReading = (obj: any) => {
+    try {
+      return obj;
+    } catch (error) {
+      console.log(`Error en hookReading() de ${this.name}:`, error);
+    }
+  };
+
+  //Metodo de Register
+  static registerEntity = (table: Table<any, any>) => {
+    const thisClass = this;
+    //Asocia la tabla de Dexie y la entidad
+    thisClass.table = table;
+    //Registramos Hooks
+
+    //Hook de creación
+    thisClass.table.hook(
+      // Registramos el hook "creating"
+      'creating',
+      function (
+        this: CreatingHookContext<any, any>,
+        primKey: any,
+        obj: { id: string },
+        transaction: Transaction,
+      ) {
+        try {
+          thisClass.hookCreating(this, primKey, obj, transaction);
+        } catch (error) {
+          console.log(`Error en ${thisClass.name} hook de creacion`, error);
+        }
+      },
+    );
+
+    //Hook de borrado
+    thisClass.table.hook(
+      // Registramos el hook "deleting"
+      'deleting',
+      function (
+        this: DeletingHookContext<any, any>,
+        primKey: any,
+        obj: any,
+        transaction: Transaction,
+      ) {
+        try {
+          thisClass.hookDeleting(this, primKey, obj, transaction);
+        } catch (error) {
+          console.log(`Error en ${thisClass.name} hook de deleting`, error);
+        }
+      },
+    );
+
+    //Hook de updating
+    thisClass.table.hook(
+      // Registramos el hook "updating"
+      'updating',
+      function (
+        this: UpdatingHookContext<any, any>,
+        modifications: any,
+        primKey: any,
+        obj: any,
+        transaction: Transaction,
+      ) {
+        try {
+          thisClass.hookUpdating(this, modifications, primKey, obj, transaction);
+        } catch (error) {
+          console.log(`Error en ${thisClass.name} hook de updating`, error);
+        }
+      },
+    );
+
+    //Hook de reading
+
+    thisClass.table.hook('reading', function (obj: any) {
+      try {
+        return thisClass.hookReading(obj);
+      } catch (error) {
+        console.log(`Error en ${thisClass.name} hook de reading`, error);
+      }
+    });
+  };
+
+  //Metodos de instancia
+  //Esto permite llamar members de clase desde una instancia
+  protected getThisClass() {
+    return this.constructor as typeof SlapBaseEntity;
+  }
+
+  // --- MÉTODOS DE INSTANCIA (Dentro de SlapBaseEntity) ---
+
+  getObjectData = () => {
+    const copiaDatos: any = {};
+    for (const col of this.getThisClass()._columns) {
+      if (Object.prototype.hasOwnProperty.call(this, col) && typeof this[col] !== 'function') {
+        copiaDatos[col] = this[col];
+      }
+    }
+    return copiaDatos;
+  };
+  patch = (obj: any) => {
+    for (const key in obj) {
+      this[key] = obj[key];
+    }
+  };
+  /**
+   * Guarda o actualiza la instancia actual en la base de datos.
+   * Si no tiene ID y tienes un Hook de UUID, se le asignará uno.
+   */
+  async save(): Promise<string | number | undefined> {
+    try {
+      const table = this.getThisClass().table;
+      // Guardamos y recuperamos la PK resultante
+      const pk = await table.put(this.getObjectData());
+      // Si la base de datos generó o cambió el ID, lo actualizamos en la instancia
+      if (!this.id && typeof pk === 'string') {
+        this.id = pk;
+      }
+      return pk;
+    } catch (error) {
+      console.log(
+        `Error en save() de ${this.getThisClass().name}:`,
+        error,
+        'data==>',
+        JSON.stringify(this),
+      );
+    }
+  }
+
+  /**
+   * Elimina este registro específico de la base de datos.
+   */
+  async delete(): Promise<void> {
+    try {
+      if (!this.id) {
+        throw new Error('No se puede eliminar una instancia que no tiene ID (no existe en DB).');
+      }
+      await this.getThisClass().table.delete(this.id);
+    } catch (error) {
+      console.log(
+        `Error en delete() de ${this.getThisClass().name}:`,
+        error,
+        'data==>',
+        JSON.stringify(this),
+      );
+    }
+  }
+
+  /**
+   * Actualiza solo ciertos campos de la instancia actual.
+   * Es más eficiente que save() si solo cambias una propiedad.
+   */
+  async update(changes: Partial<this>): Promise<number | undefined> {
+    try {
+      if (!this.id) {
+        throw new Error('No se puede actualizar una instancia sin ID.');
+      }
+
+      // Aplicamos los cambios a la DB
+      const updatedCount = await this.getThisClass().table.update(this.id, changes);
+
+      // Si la DB se actualizó, aplicamos los cambios también a esta instancia en memoria
+      if (updatedCount) {
+        Object.assign(this, changes);
+      }
+      return updatedCount;
+    } catch (error) {
+      console.log(
+        `Error en update() de ${this.getThisClass().name}:`,
+        error,
+        'data==>',
+        JSON.stringify(this),
+      );
+    }
+  }
+
+  /**
+   * Vuelve a cargar los datos desde la base de datos a esta instancia.
+   * Útil si sospechas que los datos en disco cambiaron (ej. tras un Sync).
+   */
+  async reload(): Promise<this | undefined> {
+    try {
+      if (!this.id) return undefined;
+
+      const freshData = await this.getThisClass().table.get(this.id);
+      if (freshData) {
+        Object.assign(this, freshData);
+        return this;
+      }
+      return undefined;
+    } catch (error) {
+      console.log(
+        `Error en reload() de ${this.getThisClass().name}:`,
+        error,
+        'data==>',
+        JSON.stringify(this),
+      );
+    }
+  }
+
+  /**
+   * Crea una copia exacta de esta instancia pero sin el ID.
+   * Útil para funciones de "Duplicar".
+   */
+  clone(): this | undefined {
+    try {
+      const constructor = this.getThisClass();
+      const copy = new (constructor as any)(this);
+      delete copy.id;
+      return copy;
+    } catch (error) {
+      console.log(
+        `Error en clone() de ${this.getThisClass().name}:`,
+        error,
+        'data==>',
+        JSON.stringify(this),
+      );
+    }
+  }
+}
+//**********************Clase de borrado blando */
+
+export abstract class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
+  static DEFAULT_ESTADO = 'pending'; //Estado por defecto cuando no tiene estado
+  static DELETED_ESTADO = 'deleted'; //Cuando elimina localmente
+  static UPDATED_ESTADO = 'updated'; //Cuando actualiza localmente
+  static CREATED_ESTADO = 'created'; //Cuando recarga el registro desde el repo local
+
+  static override schema = `${super.schema},status,createdAt,updatedAt,deletedAt`;
+  @Column
+  status!: string;
+  @Column
+  createdAt: number = 0;
+  @Column
+  updatedAt: number = 0;
+  @Column
+  deletedAt: number = 0;
+
+  constructor(data?: Partial<SlapBaseEntity>) {
+    super(data);
+    this.initializeMyData(data);
+    try {
+      this.status = this.getThisClass().DEFAULT_ESTADO;
+      this.createdAt = this.getThisClass().getAt();
+    } catch (error) {
+      console.log(
+        `Error en constructor() de ${this.getThisClass().name}:`,
+        error,
+        'data==>',
+        JSON.stringify(this),
+      );
+    }
+  }
+
+  //Metodos de ayuda de instancia para este y sus descencientes
+  protected override getThisClass() {
+    return super.getThisClass() as typeof SlapBaseEntitySoftDeleted;
+  }
+
+  /**
+   * Elimina este registro específico de la base de datos.
+   */
+  override async delete(): Promise<void> {
+    try {
+      if (!this.id) {
+        throw new Error('No se puede eliminar una instancia que no tiene ID (no existe en DB).');
+      }
+      await super.update({
+        status: this.getThisClass().DELETED_ESTADO, //Borra porque le cambia el estado
+        deletedAt: this.getThisClass().getAt(),
+      } as Partial<this>);
+    } catch (error) {
+      console.log(
+        `Error en delete() de ${this.getThisClass().name}:`,
+        error,
+        'data==>',
+        JSON.stringify(this),
+      );
+    }
+  }
+
+  //Creamos hardDelete para poder borrar realmente lo que necesitemos
+  async hardDelete(): Promise<void> {
+    return super.delete();
+  }
+
+  //Modificamos los hook de Create y Update para asentar los estados y timestamps
+
+  //Creating
+  static override hookCreating = (
+    hookContext: CreatingHookContext<any, any>,
+    primKey: any,
+    obj: { id: any; status: string; createdAt: number },
+    transaction: Transaction,
+  ) => {
+    obj.status = this.CREATED_ESTADO;
+    obj.createdAt = this.getAt();
+    return super.hookCreating(hookContext, primKey, obj, transaction);
+  };
+
+  //Updating
+  static override hookUpdating = (
+    hookContext: UpdatingHookContext<any, any>,
+    modifications: any,
+    primKey: any,
+    obj: { id: any; status: string; updatedAt: number },
+    transaction: Transaction,
+  ) => {
+    obj.status = this.UPDATED_ESTADO;
+    obj.updatedAt = this.getAt();
+    return super.hookUpdating(hookContext, modifications, primKey, obj, transaction);
+  };
+}
+
+//**********************Clase de replicación para SlapDb
+
+export abstract class SlapBaseEntityWithReplycation extends SlapBaseEntitySoftDeleted {
+  //Reescribe el Schema
+  static override schema = `${super.schema},synchronized`;
+  //adiciona los datamembers para controlar la sincronización
+  @Column
+  synchronized: boolean = false;
+  constructor(data: Partial<SlapBaseEntityWithReplycation>) {
+    super(data);
+    this.initializeMyData(data);
+  }
+
+  //Modificamos los hook de Create y Update para asentar los estados y timestamps
+
+  //Creating
+  static override hookCreating = (
+    hookContext: CreatingHookContext<any, any>,
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) => {
+    super.hookCreating(hookContext, primKey, obj, transaction);
+    obj.synchronized = false;
+  };
+
+  //Updating
+  static override hookUpdating = (
+    hookContext: UpdatingHookContext<any, any>,
+    modifications: any,
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) => {
+    super.hookUpdating(hookContext, modifications, primKey, obj, transaction);
+    obj.synchronized = false;
+  };
+}
+
+//**********************Clase de base de datos generica
+export class SlapDB extends Dexie {
+  [key: string]: any; //Define un diccionario dinámico para la clase
+  constructor(dbName: string, version: number = 1) {
+    try {
+      super(dbName);
+      this.version(version).stores({});
+      //Registra todas las clases que se han definido.
+      Object.keys(registeredEntitys).forEach((key) => {
+        if (registeredEntitys[key]) {
+          //Que tenga una clase
+          this.registerOneEntity(registeredEntitys[key]);
+        }
+      });
+    } catch (error) {
+      console.log('Error en el constructor de SlapDB:', error);
+    }
+  }
+
+  // Método extendido para incluir el mapeo
+  registerOneEntity(entityClass: typeof SlapBaseEntity) {
+    try {
+      const currentVersion = this.verno || 0;
+
+      // Definimos el store
+      this.version(currentVersion + 1).stores({
+        [entityClass.name]: entityClass.schema,
+      });
+
+      // Mapeamos la tabla a la clase
+      // Esto hace que db[tableName] devuelva instancias de entityClass
+      this[entityClass.name].mapToClass(entityClass);
+      entityClass.registerEntity(this[entityClass.name] as Table<any, any>);
+
+      //Vinculamos la tabla de la base de datos a la tabla
+    } catch (error) {
+      console.log('Error en SlapDB.registerEntity:', error);
+    }
+  }
+}
+export const createSlapDBCallBack = (config: { [key: string]: any }) =>
+  new SlapDB(config.name, config.version);

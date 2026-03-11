@@ -1,0 +1,15 @@
+Nombre de la Entidad Perfil
+{
+  "id": "String (UUID_V4)",
+  "username": "String (Unique, 3-20 chars)",
+  "email": "String (Email Format)",
+  "estado": "Enum ['active', 'inactive', 'suspended']",
+  "primerNombre": "String",
+  "apellido": "String (Optional)",
+  "avatarUrl": "String (URL)",
+  "cumpleanios": "Date (YYYY-MM-DD)",
+  "idioma": "String (ISO 639-1)",
+  "tema": "Enum ['light', 'dark', 'system']",
+  "fechaCreacion": "Timestamp (ISO 8601)",
+  "ultimoLogin": "Timestamp (ISO 8601)"
+}

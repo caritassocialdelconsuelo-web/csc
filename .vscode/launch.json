@@ -1,0 +1,57 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Asociarse Chrome en modo depuracion",
+      "port": 9222,
+      "request": "attach",
+      "type": "chrome",
+      "webRoot": "${workspaceFolder}/packages/client/dist/bex-chrome"
+    },
+    {
+      "name": "Lanzar PWA-Chrome en modo depuracion Produccion",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "https://localhost:9200",
+      "port": 9222,
+      //      "webRoot": "${workspaceFolder}",
+      "enableContentValidation": true,
+      "webRoot": "${workspaceFolder}",
+      "runtimeArgs": ["--remote-debugging-port=9222"]
+      //    "sourceMapPathOverrides": {
+      //      "webpack://lex100robot/./src/*": "${webRoot}/dist/bex*"
+      //    }
+    },
+    {
+      "name": "Lanzar Chrome en modo depuracion Test",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://sgj.dc.uat.pjn.gov.ar/lex100",
+      "port": 9222,
+      //      "webRoot": "${workspaceFolder}",
+      "enableContentValidation": true,
+      "webRoot": "${workspaceFolder}/packages/client/dist/bex-chrome",
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}/packages/client/dist/bex-chrome/",
+        "--remote-debugging-port=9222"
+      ]
+    },
+    {
+      "name": "Depuración Servidor NODE",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/packages/api-server/src/index.ts", // Archivo principal del servidor
+      "cwd": "${workspaceFolder}/packages/api-server", // Set the working directory
+      "env": { "NODE_ENV": "development" }, // Optional: Set environment variables
+      //"outFiles": [
+      //  "${workspaceFolder}/packages/api-server/dist/*.js" // Optional: Specify the location of transpiled JavaScript files
+      //],
+      "sourceMaps": true, // Optional: Enable source maps for TypeScript
+      //"port": 9229,       // Optional: Specify the debugger port
+      "restart": true // Optional: Automatically restart the debugger on code changes
+    }
+  ]
+}
