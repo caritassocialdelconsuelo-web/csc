@@ -5,8 +5,8 @@ import { registerAutomaticConnect } from 'src/composables/useSession';
 import { createSlapDBCallBack } from 'src/lib/slapdb';
 import { EPerfil } from 'src/services/database/schemas/perfil';
 //import { startAllReplications } from 'src/services/database/replication';
-import { supabase } from 'src/services/database/supabase';
-
+import { useSupabase } from 'src/composables/useSupabase';
+const { supabase: { value: supabase } } = useSupabase();
 export default boot(({ router }) => {
   router.beforeEach(async (to) => {
     // 1. RESCATE MANUAL DEL TOKEN

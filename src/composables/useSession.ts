@@ -1,7 +1,8 @@
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from 'src/services/database/supabase';
+import { useSupabase } from './useSupabase';
 import { ref } from 'vue';
 
+const { supabase: { value: supabase } } = useSupabase();
 const session = ref<Session | null>();
 
 export async function useSession() {

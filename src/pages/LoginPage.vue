@@ -42,13 +42,14 @@
   import { ref } from 'vue';
   import { useRouter } from 'vue-router';
   import { useQuasar } from 'quasar';
-  import { supabase } from 'src/services/database/supabase';
   import { useDatabase } from 'src/composables/useDb';
   import { createSlapDBCallBack } from 'src/lib/slapdb';
+  import { useSupabase } from 'src/composables/useSupabase';
   //import { useSession } from 'src/composables/useSession';
   //import { startAllReplications } from 'src/services/database/replication';
 
   const router = useRouter();
+  const { supabase: { value: supabase } } = useSupabase();
   const $q = useQuasar();
   const {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

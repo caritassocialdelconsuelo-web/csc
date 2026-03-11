@@ -1,4 +1,6 @@
-import { supabase } from '../database/supabase';
+import { useSupabase } from '../../composables/useSupabase';
+
+const { supabase: { value: supabase } } = useSupabase();
 
 /**
  * Registro de nuevo usuario con metadata
