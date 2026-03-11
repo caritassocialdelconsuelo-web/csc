@@ -1,7 +1,7 @@
 {
   "extends": "./.quasar/tsconfig.json",
   "compilerOptions": {
-    "target": "ES6",
+    "target": "es2017",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true // Opcional: solo si necesitas reflexión de tipos
   },

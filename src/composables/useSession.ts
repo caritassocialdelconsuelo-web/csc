@@ -15,7 +15,12 @@ export async function useSession() {
       }
     }
   } catch (error) {
-    console.log('Error en useDatabase:', error);
+    console.log('Error en useSession:', error);
   }
   return { session };
+}
+export const registerAutomaticConnect = (newSession: Session | null) => {
+  if (!session.value && newSession) {
+    session.value = newSession;
+  }
 }

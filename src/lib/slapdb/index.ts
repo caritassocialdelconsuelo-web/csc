@@ -1,17 +1,13 @@
-/* eslint-disable @typescript-eslint/no-this-alias */
+
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type {
   Transaction,
-  CreatingHookContext,
-  DeletingHookContext,
-  UpdatingHookContext,
-  Collection,
-  WhereClause,
   Observable as DexieObservable,
 } from 'dexie';
 import Dexie, { liveQuery, type Table } from 'dexie';
 import { BehaviorSubject, debounceTime, distinctUntilChanged, from, switchMap, type Observable as RxObservable } from 'rxjs';
+import { isAsync } from '../utils';
 
 const registeredEntitys: { [key: string]: typeof SlapBaseEntity } = {};
 
@@ -26,10 +22,14 @@ export function Entity<T extends new (...args: any[]) => any>(constructor: T) {
     }
   };
 
-  registeredEntitys[constructor.name] = claseEntidadHija as unknown as typeof SlapBaseEntity;
+  registeredEntitys[constructor.name] = constructor as unknown as typeof SlapBaseEntity;
   console.log(`Se ha registrado la clase: ${constructor.name}`);
   return claseEntidadHija;
 }
+
+
+
+
 
 export function Column(target: any, key: string) {
   // Obtenemos o inicializamos la lista de columnas en el prototipo
@@ -47,7 +47,7 @@ export abstract class SlapBaseEntity {
   static table: Table<any, any>;
   [key: string]: any; //Define un diccionario dinámico para la clase
   @Column
-  id?: string;
+  id: string | null = null;
 
   static schema = 'id';
 
@@ -222,45 +222,44 @@ export abstract class SlapBaseEntity {
   }
   //Metodos Staticos para Hooks
   static hookCreating = (
-    hookContext: CreatingHookContext<any, any>,
     primKey: any,
     obj: any,
     transaction: Transaction,
   ) => {
     try {
-      hookContext.onerror = (error) =>
-        console.log(`Error en hookCreate() -hookConext- de ${this.name}:`, error);
-      obj.id = crypto.randomUUID(); //Genera una clave única
-    } catch (error) {
-      console.log(`Error en hookCreate() de ${this.name}:`, error);
-    }
-  };
-  static hookDeleting = (
-    hookContext: CreatingHookContext<any, any>,
-    primKey: any,
-    obj: { id: any },
-    transaction: Transaction,
-  ) => {
-    try {
-      hookContext.onsuccess = (primKey) => console.log('Borrado Succes con PK:', primKey);
-      hookContext.onerror = (error) =>
-        console.log(`Error en hookCreate() -hookContext- de ${this.name}:`, error);
+      if (!obj.id) {//Si no tiene ID, le asignamos uno nuevo
+        obj.id = crypto.randomUUID(); //Genera una clave única
+      }
+      return obj.id; //Devuelve la PK para que Dexie la use
     } catch (error) {
       console.log(`Error en hookCreate() de ${this.name}:`, error);
     }
   };
 
+  static hookDeleting = (
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) => {
+    try {
+      //      hookContext.onsuccess = () => console.log('Borrado Succes con PK:', primKey);
+      //      hookContext.onerror = (error) =>
+      //        console.log(`Error en hookDeleting() -hookContext- de ${this.name}:`, error);
+    } catch (error) {
+      console.log(`Error en hookDeleting() de ${this.name}:`, error);
+    }
+  };
+
   static hookUpdating = (
-    hookContext: UpdatingHookContext<any, any>,
     modifications: any,
     primKey: any,
     obj: any,
     transaction: Transaction,
   ) => {
     try {
-      hookContext.onsuccess = (primKey) => console.log('Updating Succes con PK:', primKey);
-      hookContext.onerror = (error) =>
-        console.log(`Error en hookUpdating() -hookContext- de ${this.name}:`, error);
+      //      hookContext.onsuccess = (primKey) => console.log('Updating Succes con PK:', primKey);
+      //      hookContext.onerror = (error) =>
+      //        console.log(`Error en hookUpdating() -hookContext- de ${this.name}:`, error);
     } catch (error) {
       console.log(`Error en hookUpdating() de ${this.name}:`, error);
     }
@@ -272,79 +271,6 @@ export abstract class SlapBaseEntity {
     } catch (error) {
       console.log(`Error en hookReading() de ${this.name}:`, error);
     }
-  };
-
-  //Metodo de Register
-  static registerEntity = (table: Table<any, any>) => {
-    const thisClass = this;
-    //Asocia la tabla de Dexie y la entidad
-    thisClass.table = table;
-    //Registramos Hooks
-
-    //Hook de creación
-    thisClass.table.hook(
-      // Registramos el hook "creating"
-      'creating',
-      function (
-        this: CreatingHookContext<any, any>,
-        primKey: any,
-        obj: { id: string },
-        transaction: Transaction,
-      ) {
-        try {
-          thisClass.hookCreating(this, primKey, obj, transaction);
-        } catch (error) {
-          console.log(`Error en ${thisClass.name} hook de creacion`, error);
-        }
-      },
-    );
-
-    //Hook de borrado
-    thisClass.table.hook(
-      // Registramos el hook "deleting"
-      'deleting',
-      function (
-        this: DeletingHookContext<any, any>,
-        primKey: any,
-        obj: any,
-        transaction: Transaction,
-      ) {
-        try {
-          thisClass.hookDeleting(this, primKey, obj, transaction);
-        } catch (error) {
-          console.log(`Error en ${thisClass.name} hook de deleting`, error);
-        }
-      },
-    );
-
-    //Hook de updating
-    thisClass.table.hook(
-      // Registramos el hook "updating"
-      'updating',
-      function (
-        this: UpdatingHookContext<any, any>,
-        modifications: any,
-        primKey: any,
-        obj: any,
-        transaction: Transaction,
-      ) {
-        try {
-          thisClass.hookUpdating(this, modifications, primKey, obj, transaction);
-        } catch (error) {
-          console.log(`Error en ${thisClass.name} hook de updating`, error);
-        }
-      },
-    );
-
-    //Hook de reading
-
-    thisClass.table.hook('reading', function (obj: any) {
-      try {
-        return thisClass.hookReading(obj);
-      } catch (error) {
-        console.log(`Error en ${thisClass.name} hook de reading`, error);
-      }
-    });
   };
 
   //Metodos de instancia
@@ -554,27 +480,25 @@ export abstract class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
 
   //Creating
   static override hookCreating = (
-    hookContext: CreatingHookContext<any, any>,
     primKey: any,
-    obj: { id: any; status: string; createdAt: number },
+    obj: any,
     transaction: Transaction,
   ) => {
     obj.status = this.CREATED_ESTADO;
     obj.createdAt = this.getAt();
-    return super.hookCreating(hookContext, primKey, obj, transaction);
+    return super.hookCreating(primKey, obj, transaction);
   };
 
   //Updating
   static override hookUpdating = (
-    hookContext: UpdatingHookContext<any, any>,
     modifications: any,
     primKey: any,
-    obj: { id: any; status: string; updatedAt: number },
+    obj: any,
     transaction: Transaction,
   ) => {
     obj.status = this.UPDATED_ESTADO;
     obj.updatedAt = this.getAt();
-    return super.hookUpdating(hookContext, modifications, primKey, obj, transaction);
+    return super.hookUpdating(modifications, primKey, obj, transaction);
   };
 }
 
@@ -595,27 +519,41 @@ export abstract class SlapBaseEntityWithReplycation extends SlapBaseEntitySoftDe
 
   //Creating
   static override hookCreating = (
-    hookContext: CreatingHookContext<any, any>,
     primKey: any,
     obj: any,
     transaction: Transaction,
   ) => {
-    super.hookCreating(hookContext, primKey, obj, transaction);
     obj.synchronized = false;
+    return super.hookCreating(primKey, obj, transaction);
   };
 
   //Updating
   static override hookUpdating = (
-    hookContext: UpdatingHookContext<any, any>,
     modifications: any,
     primKey: any,
     obj: any,
     transaction: Transaction,
   ) => {
-    super.hookUpdating(hookContext, modifications, primKey, obj, transaction);
     obj.synchronized = false;
+    return super.hookUpdating(modifications, primKey, obj, transaction);
   };
 }
+
+//**********************Clase de replicación para SlapDb
+
+export abstract class SlapBaseEntityWithReplycationCustomGenerateId extends SlapBaseEntitySoftDeleted {
+  //Funcion asyncrona para generar el ID
+  protected abstract generateCustomID(): Promise<string | undefined>
+  override async save(): Promise<string | number | undefined> {
+    //Aqui necesitamos traer todos los valores asyncronos de la session antes de grabar y guardarlos en el perfil
+    if (!this.id) {
+      this.id = await this.generateCustomID() || '';
+    };
+    return await super.save();
+  }
+}
+
+
 
 //**********************Clase de base de datos generica
 export class SlapDB extends Dexie {
@@ -649,9 +587,7 @@ export class SlapDB extends Dexie {
       // Mapeamos la tabla a la clase
       // Esto hace que db[tableName] devuelva instancias de entityClass
       this[entityClass.name].mapToClass(entityClass);
-      entityClass.registerEntity(this[entityClass.name] as Table<any, any>);
-
-      //Vinculamos la tabla de la base de datos a la tabla
+      registerEntity(entityClass, this[entityClass.name] as Table<any, any>);
     } catch (error) {
       console.log('Error en SlapDB.registerEntity:', error);
     }
@@ -659,3 +595,37 @@ export class SlapDB extends Dexie {
 }
 export const createSlapDBCallBack = (config: { [key: string]: any }) =>
   new SlapDB(config.name, config.version);
+
+
+//Function de Register
+const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<any, any>) => {
+  //Asocia la tabla de Dexie y la entidad
+  classEntity.table = table;
+  //Registramos Hooks
+
+  //Hook de creación
+  classEntity.table.hook(
+    // Registramos el hook "creating"
+    'creating',
+    classEntity.hookCreating
+  );
+  //Hook de borrado
+  classEntity.table.hook(
+    // Registramos el hook "deleting"
+    'deleting',
+    classEntity.hookDeleting
+  );
+
+  //Hook de updating
+  classEntity.table.hook(
+    // Registramos el hook "updating"
+    'updating',
+    classEntity.hookUpdating
+  );
+
+  //Hook de reading
+
+  classEntity.table.hook('reading',
+    classEntity.hookReading
+  );
+};

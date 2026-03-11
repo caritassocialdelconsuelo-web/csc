@@ -1,21 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { boot } from 'quasar/wrappers';
-import { useDatabase } from 'src/composables/useDb';
+import { prepareDb, useDatabase } from 'src/composables/useDb';
+import { registerAutomaticConnect } from 'src/composables/useSession';
 import { createSlapDBCallBack } from 'src/lib/slapdb';
 import { EPerfil } from 'src/services/database/schemas/perfil';
 //import { startAllReplications } from 'src/services/database/replication';
 import { supabase } from 'src/services/database/supabase';
-
-async function prepareDb(userId: string) {
-  const {
-    db: { value: db },
-  } = useDatabase({ name: `dbCSC_${userId}`, version: 1 }, createSlapDBCallBack);
-
-  if (db) {
-    await db.open();
-    return db;
-  }
-}
 
 export default boot(({ router }) => {
   router.beforeEach(async (to) => {
@@ -89,6 +79,7 @@ export default boot(({ router }) => {
    */
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
+      registerAutomaticConnect(session);
       const db = await prepareDb(session.user.id);
       const p = new EPerfil({
         apellido: 'Celli',
