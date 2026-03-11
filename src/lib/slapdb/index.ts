@@ -8,8 +8,10 @@ import type {
   UpdatingHookContext,
   Collection,
   WhereClause,
+  Observable as DexieObservable,
 } from 'dexie';
-import Dexie, { type Table } from 'dexie';
+import Dexie, { liveQuery, type Table } from 'dexie';
+import { BehaviorSubject, debounceTime, distinctUntilChanged, from, switchMap, type Observable as RxObservable } from 'rxjs';
 
 const registeredEntitys: { [key: string]: typeof SlapBaseEntity } = {};
 
@@ -73,6 +75,53 @@ export abstract class SlapBaseEntity {
   }
   //Metodos estaticos de la clase base para todas las entidades (colecciones)
   // --- MÉTODOS ESTÁTICOS (Proxy de Table) ---
+  static getLiveQuery$<T extends SlapBaseEntity>(querier: () => any): DexieObservable<T[]> {
+    try {
+      const observer$: DexieObservable<T[]> = liveQuery(querier) as unknown as DexieObservable<T[]>;
+      return observer$;
+    } catch (error) {
+      console.log(`Error en getLiveQuery$() de ${this.name}:`, error);
+      // Fallback to an empty observable to keep return type consistent
+      return liveQuery(() => []) as unknown as DexieObservable<T[]>;
+    }
+  }
+
+  //Ejecuta un query con parametros que entran a la querier, cuando los parametros cambian, el query se vuelve a ejecutar y devuelve un nuevo observable con los resultados actualizados
+  //Devuelve un objeto con una funcion para actualizar los parametros y el observable con los resultados del query
+  static getLiveQueryWithParams$<T extends SlapBaseEntity>(
+    parameters: { [key: string]: any },
+    querier: (params: { [key: string]: any }) => any): {
+      setNewParams: (parameters: { [key: string]: any }) => void,
+      $observer: RxObservable<T[]>
+    } {
+    try {
+      //Defino la mutacion de los parametros para que el querier pueda acceder a ellos
+      const _queryTrigger$ = new BehaviorSubject<{ [key: string]: any }>(parameters);
+      const setNewParams = (newParams: { [key: string]: any }) => {
+        const current = _queryTrigger$.getValue();
+        _queryTrigger$.next({ ...current, ...newParams });
+      }
+      const $observer = _queryTrigger$.pipe(
+        debounceTime(300),
+        distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)),
+        switchMap((params) =>
+          from(this.getLiveQuery$<T>(() => querier(params)))
+        )
+      ) as unknown as RxObservable<T[]>;
+      return {
+        setNewParams,
+        $observer
+      }
+    } catch (error) {
+      console.log(`Error en getLiveQueryWithParams$() de ${this.name}:`, error);
+      // Fallback to an empty observable to keep return type consistent
+      return {
+        setNewParams: (newParams: { [key: string]: any }) => { },
+        $observer: from(liveQuery(() => [])) as unknown as RxObservable<T[]>
+      };
+    }
+  }
+
 
   // Lectura
   static async get(id: any) {
