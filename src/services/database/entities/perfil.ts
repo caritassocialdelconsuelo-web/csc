@@ -2,12 +2,14 @@
 //Declaración de la entidad Perfil
 
 import { useSession } from 'src/composables/useSession';
-import { Column, Entity, SlapBaseEntityWithReplycationCustomGenerateId } from 'src/lib/slapdb';
+import { Column, Entity } from 'src/lib/slapdb/decorators';
+import { SlapBaseEntityWithReplycationCustomGenerateId } from 'src/lib/slapdb/SlapBaseEntityWithReplycationCustomGenerateId';
+
 export type EstadoPerfil = 'activo' | 'inactivo' | 'suspendido';
 export type TemaApp = 'light' | 'dark' | 'system';
 
 // 1. Define los tipos literales explícitamente
-@Entity
+@Entity('TPerfil')
 export class EPerfil extends SlapBaseEntityWithReplycationCustomGenerateId {
   static override schema = `${super.schema} ,username,email,estado`;
   @Column

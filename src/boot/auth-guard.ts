@@ -1,13 +1,18 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { boot } from 'quasar/wrappers';
-import { prepareDb, useDatabase } from 'src/composables/useDb';
+import { prepareDb } from 'src/composables/useDb';
 import { registerAutomaticConnect } from 'src/composables/useSession';
-import { createSlapDBCallBack } from 'src/lib/slapdb';
-import { EPerfil } from 'src/services/database/schemas/perfil';
 //import { startAllReplications } from 'src/services/database/replication';
 import { useSupabase } from 'src/composables/useSupabase';
-const { supabase: { value: supabase } } = useSupabase();
+import { EPerfil } from 'src/services/database/entities/perfil';
+// En tu archivo principal o donde se defina las clases ppales
+const modules = import.meta.glob(['/src/lib/sladb/*.ts', '/src/services/database/entities/*.ts'], { eager: true });
+
+
+
+
 export default boot(({ router }) => {
+  const { supabase: { value: supabase } } = useSupabase();
   router.beforeEach(async (to) => {
     // 1. RESCATE MANUAL DEL TOKEN
     // Buscamos el token en cualquier parte del hash o de la ruta
@@ -39,8 +44,8 @@ export default boot(({ router }) => {
           const userId = data.session.user.id;
           // 3. INICIALIZACIÓN DE SlapBase
 
-          const db = await prepareDb(userId);
-          const p = new EPerfil({
+          const db = prepareDb(userId);
+          /*const p = new EPerfil({
             apellido: 'Celli',
             avatarUrl: '',
             fechaCreacion: new Date(),
@@ -49,7 +54,7 @@ export default boot(({ router }) => {
             tema: 'dark',
             username: 'pcelli',
           });
-          await p.save();
+          await p.save();*/
           // Llamamos al replicador
           //if (navigator.onLine) {
           //  await startAllReplications(db, data.session.user.id);
@@ -80,7 +85,8 @@ export default boot(({ router }) => {
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
       registerAutomaticConnect(session);
-      const db = await prepareDb(session.user.id);
+      const db = prepareDb(session.user.id);
+      /*---------
       const p = new EPerfil({
         apellido: 'Celli',
         avatarUrl: '',
@@ -91,7 +97,7 @@ export default boot(({ router }) => {
         username: 'pcelli',
       });
       await p.save();
-
+      --------------------------*/
       //await startAllReplications(db, session.user.id);
       // Solo redirigimos si estamos en una página de auth
       if (

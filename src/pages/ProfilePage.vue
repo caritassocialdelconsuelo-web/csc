@@ -57,10 +57,9 @@
   import { ref, onMounted, onUnmounted, computed } from 'vue';
   import { useQuasar } from 'quasar';
 
-  import { useDatabase } from '../composables/useDb';
+  import { prepareDb } from '../composables/useDb';
   import { useSupabase } from '../composables/useSupabase';
-  import { createSlapDBCallBack } from 'src/lib/slapdb';
-  import { EPerfil } from 'src/services/database/schemas/perfil';
+  import { EPerfil } from 'src/services/database/entities/perfil';
 
   const { supabase: { value: supabase } } = useSupabase();
 
@@ -78,9 +77,6 @@
 
   // ESTADO REACTIVO
   const $q = useQuasar();
-  const {
-    db: { value: db },
-  } = useDatabase({}, createSlapDBCallBack);
   const docPerfil = ref<EPerfil | null>(null);
   const formData = ref<Partial<EPerfil>>({});
   const loadingInitial = ref(true);
@@ -108,6 +104,7 @@
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      const db = prepareDb(user?.id || '');
 
       if (!user || !db) {
         $q.notify({ type: 'negative', message: 'No se detectó sesión activa' });

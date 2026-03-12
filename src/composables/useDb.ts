@@ -8,24 +8,29 @@ const error = ref(null);
 
 export function useDatabase(
   config: { [key: string]: any },
-  createFnc: (config: { [key: string]: any }) => DATABASE_CLASS,
+  createFnc?: (config: { [key: string]: any }) => SlapDB | null
 ) {
   try {
-    if (!db.value) {
-      db.value = createFnc(config);
+    if (!db.value && createFnc) {
+      const dbCreated = createFnc(config);
+      if (dbCreated) {
+        db.value = dbCreated;
+      }
     }
   } catch (error) {
     console.log('Error en useDatabase:', error);
   }
   return { db, loading, error /*, fetchData*/ };
 }
-export async function prepareDb(userId: string) {
+export function prepareDb(userId: string) {
+  //while (Object.keys(registeredEntitys).length === 0) {
+  //  await awaiting(100); // Esperar 100ms antes de volver a comprobar
+  //}
   const {
     db: { value: db },
   } = useDatabase({ name: `dbCSC_${userId}`, version: 1 }, createSlapDBCallBack);
 
   if (db) {
-    await db.open();
     return db;
   }
 }

@@ -51,11 +51,6 @@
   const router = useRouter();
   const { supabase: { value: supabase } } = useSupabase();
   const $q = useQuasar();
-  const {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    db: { value: db },
-  } = useDatabase({}, createSlapDBCallBack);
-
   const email = ref('');
   const password = ref('');
   const showPassword = ref(false);
@@ -74,7 +69,10 @@
       if (error) throw error;
 
       if (data.user) {
-        // 2. Inicializar la base de datos local (RxDB) con el ID del usuario
+        const {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          db: { value: db },
+        } = useDatabase({ name: `dbCSC_${data.user.id}`, version: 1 }, createSlapDBCallBack);
 
         // 3. Iniciar replicación (Solo si estamos online)
         if (window.navigator.onLine) {
