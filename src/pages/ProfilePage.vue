@@ -5,10 +5,21 @@
       <p>Cargando perfil local...</p>
     </div>
 
-    <q-card v-else class="column shadow-2" style="width: 100%; max-width: 600px; border-radius: 12px">
+    <q-card
+      v-else
+      class="column shadow-2"
+      style="width: 100%; max-width: 600px; border-radius: 12px"
+    >
       <q-card-section class="bg-primary text-white q-pa-lg">
         <div class="row items-center no-wrap">
-          <q-avatar size="70px" font-size="32px" color="white" text-color="primary" icon="person" class="q-mr-md" />
+          <q-avatar
+            size="70px"
+            font-size="32px"
+            color="white"
+            text-color="primary"
+            icon="person"
+            class="q-mr-md"
+          />
           <div>
             <div class="text-h6">{{ formData.username }}</div>
             <div class="text-subtitle2 opacity-80">{{ formData.email }}</div>
@@ -21,19 +32,45 @@
           <div class="text-overline text-grey-7 shadow-bottom q-mb-sm">Datos Personales</div>
 
           <div class="row q-col-gutter-md">
-            <q-input v-model="formData.primerNombre" label="Primer Nombre" outlined class="col-12 col-sm-6"
-              :rules="[(val) => !!val || 'El nombre es requerido']" />
-            <q-input v-model="formData.apellido" label="Apellido" outlined class="col-12 col-sm-6"
-              :rules="[(val) => !!val || 'El apellido es requerido']" />
+            <q-input
+              v-model="formData.nombre"
+              label="Primer Nombre"
+              outlined
+              class="col-12 col-sm-6"
+              :rules="[(val) => !!val || 'El nombre es requerido']"
+            />
+            <q-input
+              v-model="formData.apellido"
+              label="Apellido"
+              outlined
+              class="col-12 col-sm-6"
+              :rules="[(val) => !!val || 'El apellido es requerido']"
+            />
           </div>
 
           <div class="text-overline text-grey-7 q-mt-lg">Preferencias de la Aplicación</div>
 
           <div class="row q-col-gutter-md">
-            <q-select v-model="formData.idioma" :options="IDIOMA_OPTIONS" label="Idioma" outlined emit-value map-options
-              class="col-12 col-sm-6" options-dense />
-            <q-select v-model="formData.tema" :options="TEMA_OPTIONS" label="Tema Visual" outlined emit-value
-              map-options class="col-12 col-sm-6" options-dense />
+            <q-select
+              v-model="formData.idioma"
+              :options="IDIOMA_OPTIONS"
+              label="Idioma"
+              outlined
+              emit-value
+              map-options
+              class="col-12 col-sm-6"
+              options-dense
+            />
+            <q-select
+              v-model="formData.tema"
+              :options="TEMA_OPTIONS"
+              label="Tema Visual"
+              outlined
+              emit-value
+              map-options
+              class="col-12 col-sm-6"
+              options-dense
+            />
           </div>
 
           <q-separator class="q-my-lg" />
@@ -44,8 +81,14 @@
               <q-badge :color="statusColor" label-color="white" :label="formData.estado" />
             </div>
 
-            <q-btn label="Guardar Cambios" type="submit" color="primary" :loading="saving" icon="save"
-              padding="sm lg" />
+            <q-btn
+              label="Guardar Cambios"
+              type="submit"
+              color="primary"
+              :loading="saving"
+              icon="save"
+              padding="sm lg"
+            />
           </div>
         </q-form>
       </q-card-section>
@@ -54,104 +97,106 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, onMounted, onUnmounted, computed } from 'vue';
-  import { useQuasar } from 'quasar';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useQuasar } from 'quasar';
 
-  import { prepareDb } from '../composables/useDb';
-  import { useSupabase } from '../composables/useSupabase';
-  import { EPerfil } from 'src/services/database/entities/perfil';
+import { prepareDb } from '../composables/useDb';
+import { useSupabase } from '../composables/useSupabase';
+import { EPerfil } from 'src/services/database/entities/perfil';
 
-  const { supabase: { value: supabase } } = useSupabase();
+const {
+  supabase: { value: supabase },
+} = useSupabase();
 
-  // CONSTANTES
-  const IDIOMA_OPTIONS = [
-    { label: 'Español', value: 'es' },
-    { label: 'English', value: 'en' },
-  ];
+// CONSTANTES
+const IDIOMA_OPTIONS = [
+  { label: 'Español', value: 'es' },
+  { label: 'English', value: 'en' },
+];
 
-  const TEMA_OPTIONS = [
-    { label: 'Sistema', value: 'system' },
-    { label: 'Claro', value: 'light' },
-    { label: 'Oscuro', value: 'dark' },
-  ];
+const TEMA_OPTIONS = [
+  { label: 'Sistema', value: 'system' },
+  { label: 'Claro', value: 'light' },
+  { label: 'Oscuro', value: 'dark' },
+];
 
-  // ESTADO REACTIVO
-  const $q = useQuasar();
-  const docPerfil = ref<EPerfil | null>(null);
-  const formData = ref<Partial<EPerfil>>({});
-  const loadingInitial = ref(true);
-  const saving = ref(false);
+// ESTADO REACTIVO
+const $q = useQuasar();
+const docPerfil = ref<EPerfil | null>(null);
+const formData = ref<Partial<EPerfil>>({});
+const loadingInitial = ref(true);
+const saving = ref(false);
 
-  // COMPUTED
-  const statusColor = computed(() => {
-    switch (formData.value.estado) {
-      case 'activo':
-        return 'positive';
-      case 'suspendido':
-        return 'negative';
-      case 'inactivo':
-        return 'negative';
-      default:
-        return 'warning';
-    }
-  });
-
-  /**
-   * Carga inicial y suscripción reactiva
-   */
-  onMounted(async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const db = prepareDb(user?.id || '');
-
-      if (!user || !db) {
-        $q.notify({ type: 'negative', message: 'No se detectó sesión activa' });
-        return;
-      }
-
-      docPerfil.value = await EPerfil.get(user.id);
-      formData.value = docPerfil.value?.getObjectData();
-      loadingInitial.value = false;
-    } catch (error) {
-      console.error('Error en ProfilePage:', error);
-    }
-  });
-
-  /**
-   * Limpieza al salir de la página
-   */
-  onUnmounted(() => { });
-
-  /**
-   * Persistencia Offline-First
-   */
-  async function saveProfile() {
-    if (!docPerfil.value) return;
-
-    saving.value = true;
-    try {
-      docPerfil.value.patch({
-        primerNombre: formData.value.primerNombre || '',
-        apellido: formData.value.apellido || '',
-        idioma: formData.value.idioma || '',
-        tema: formData.value.tema || 'system',
-      });
-      await docPerfil.value.save();
-      $q.notify({
-        type: 'positive',
-        message: 'Cambios guardados localmente',
-        caption: 'Se sincronizará con el servidor automáticamente.',
-        timeout: 2000,
-      });
-    } catch (err) {
-      console.error('Error al parchear documento:', err);
-      $q.notify({ type: 'negative', message: 'Error al actualizar perfil' });
-    } finally {
-      saving.value = false;
-    }
+// COMPUTED
+const statusColor = computed(() => {
+  switch (formData.value.estado) {
+    case 'activo':
+      return 'positive';
+    case 'suspendido':
+      return 'negative';
+    case 'inactivo':
+      return 'negative';
+    default:
+      return 'warning';
   }
+});
+
+/**
+ * Carga inicial y suscripción reactiva
+ */
+onMounted(async () => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const db = prepareDb(user?.id || '');
+
+    if (!user || !db) {
+      $q.notify({ type: 'negative', message: 'No se detectó sesión activa' });
+      return;
+    }
+
+    docPerfil.value = await EPerfil.get(user.id);
+    formData.value = docPerfil.value?.getObjectData();
+    loadingInitial.value = false;
+  } catch (error) {
+    console.error('Error en ProfilePage:', error);
+  }
+});
+
+/**
+ * Limpieza al salir de la página
+ */
+onUnmounted(() => {});
+
+/**
+ * Persistencia Offline-First
+ */
+async function saveProfile() {
+  if (!docPerfil.value) return;
+
+  saving.value = true;
+  try {
+    docPerfil.value.patch({
+      nombre: formData.value.nombre || '',
+      apellido: formData.value.apellido || '',
+      idioma: formData.value.idioma || '',
+      tema: formData.value.tema || 'system',
+    });
+    await docPerfil.value.save();
+    $q.notify({
+      type: 'positive',
+      message: 'Cambios guardados localmente',
+      caption: 'Se sincronizará con el servidor automáticamente.',
+      timeout: 2000,
+    });
+  } catch (err) {
+    console.error('Error al parchear documento:', err);
+    $q.notify({ type: 'negative', message: 'Error al actualizar perfil' });
+  } finally {
+    saving.value = false;
+  }
+}
 </script>
 
 <style scoped>

@@ -12,6 +12,19 @@
       "webRoot": "${workspaceFolder}/packages/client/dist/bex-chrome"
     },
     {
+      "name": "Depurar Migracion de Base de Datos",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/tsx",
+      "args": ["${workspaceFolder}/src/lib/slapdb/scripts/migration.ts"],
+      "internalConsoleOptions": "openOnSessionStart",
+      "skipFiles": ["<node_internals>/**"],
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    {
       "name": "Lanzar PWA-Chrome en modo depuracion Produccion",
       "type": "pwa-chrome",
       "request": "launch",
@@ -24,6 +37,14 @@
       //    "sourceMapPathOverrides": {
       //      "webpack://lex100robot/./src/*": "${webRoot}/dist/bex*"
       //    }
+    },
+    {
+      "name": "Asociarse PWA",
+      "port": 9222,
+      "request": "attach",
+      "urlFilter": "https://localhost:9200*",
+      "type": "pwa-chrome",
+      "webRoot": "${workspaceFolder}"
     },
     {
       "name": "Lanzar Chrome en modo depuracion Test",

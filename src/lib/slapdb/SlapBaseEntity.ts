@@ -1,21 +1,28 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Table, liveQuery, Transaction, Observable } from "dexie";
-import { BehaviorSubject, debounceTime, distinctUntilChanged, switchMap, from } from "rxjs";
-import { Column } from "./decorators";
-import { useDatabase } from "src/composables/useDb";
+import { Table, liveQuery, Transaction, Observable } from 'dexie';
+import { BehaviorSubject, debounceTime, distinctUntilChanged, switchMap, from } from 'rxjs';
+import { Column } from './decorators';
+import { useDatabase } from 'src/composables/useDb';
 
 //Clase base para todas las entidades con ID generado por UUID
 export class SlapBaseEntity {
-  static _columns = [];
+  static _columns: string[] = [];
+  static _metadataColumns: string[] = [];
+  static _keyColumns: string[] = [];
+  static _systemColumns: string[] = [];
+  static _indexedColumns: string[] = []; //Lista de columnas que se deben indexar en la base de datos, se setea con el decorador @Column({indexed:true})
   static table: Table<any, any>;
-  static registrable: boolean = false;//Indica si esta clase se registra en la base de datos, por defecto es false, las clases que se quieran registrar deden usar el decorador @Entity, que setea este valor a true
-  static registered: boolean = false;//Indica si esta clase ya se ha registrado en la base de datos, para evitar registros duplicados, se setea a true cuando se registra la clase
-  [key: string]: any; //Define un diccionario dinámico para la clase
-  @Column
-  id: string | null = null;
+  static registrable: boolean = false; //Indica si esta clase se registra en la base de datos, por defecto es false, las clases que se quieran registrar deden usar el decorador @Entity, que setea este valor a true
+  static registered: boolean = false; //Indica si esta clase ya se ha registrado en la base de datos, para evitar registros duplicados, se setea a true cuando se registra la clase
+  static get schema() {
+    return this._indexedColumns.length > 0 ? `${this._indexedColumns.join(',')}` : 'id';
+  } //Definimos el schema base con ID y las columnas indexadas, las columnas indexadas se definen con el decorador @Column({indexed:true})
 
-  static schema = 'id';
+  [key: string]: any; //Define un diccionario dinámico para la clase
+
+  @Column('key')
+  id: string | null = null;
 
   //Constructor genérico
   constructor(data?: Partial<SlapBaseEntity>) {
@@ -69,38 +76,38 @@ export class SlapBaseEntity {
   //Devuelve un objeto con una funcion para actualizar los parametros y el observable con los resultados del query
   static getLiveQueryWithParams$<T extends SlapBaseEntity>(
     parameters: { [key: string]: any },
-    querier: (params: { [key: string]: any }) => any): {
-      setNewParams: (parameters: { [key: string]: any }) => void,
-      $observer: Observable<T[]>
-    } {
+    querier: (params: { [key: string]: any }) => any,
+  ): {
+    setNewParams: (parameters: { [key: string]: any }) => void;
+    $observer: Observable<T[]>;
+  } {
     try {
       //Defino la mutacion de los parametros para que el querier pueda acceder a ellos
       const _queryTrigger$ = new BehaviorSubject<{ [key: string]: any }>(parameters);
       const setNewParams = (newParams: { [key: string]: any }) => {
         const current = _queryTrigger$.getValue();
         _queryTrigger$.next({ ...current, ...newParams });
-      }
+      };
       const $observer = _queryTrigger$.pipe(
         debounceTime(300),
         distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)),
-        switchMap((params) =>
-          from(this.getLiveQuery$<T>(() => querier(params)))
-        )
+        switchMap((params) => from(this.getLiveQuery$<T>(() => querier(params)))),
       ) as unknown as Observable<T[]>;
       return {
         setNewParams,
-        $observer
-      }
+        $observer,
+      };
     } catch (error) {
       console.log(`Error en getLiveQueryWithParams$() de ${this.name}:`, error);
       // Fallback to an empty observable to keep return type consistent
       return {
-        setNewParams: (newParams: { [key: string]: any }) => { Object.assign(parameters, newParams); },
-        $observer: from(liveQuery(() => [])) as unknown as Observable<T[]>
+        setNewParams: (newParams: { [key: string]: any }) => {
+          Object.assign(parameters, newParams);
+        },
+        $observer: from(liveQuery(() => [])) as unknown as Observable<T[]>,
       };
     }
   }
-
 
   // Lectura
   static async get(id: any) {
@@ -200,13 +207,10 @@ export class SlapBaseEntity {
     return Date.now();
   }
   //Metodos Staticos para Hooks
-  static hookCreating = (
-    primKey: any,
-    obj: any,
-    transaction: Transaction,
-  ) => {
+  static hookCreating = (primKey: any, obj: any, transaction: Transaction) => {
     try {
-      if (!obj.id) {//Si no tiene ID, le asignamos uno nuevo
+      if (!obj.id) {
+        //Si no tiene ID, le asignamos uno nuevo
         obj.id = crypto.randomUUID(); //Genera una clave única
       }
       return obj.id; //Devuelve la PK para que Dexie la use
@@ -215,11 +219,7 @@ export class SlapBaseEntity {
     }
   };
 
-  static hookDeleting = (
-    primKey: any,
-    obj: any,
-    transaction: Transaction,
-  ) => {
+  static hookDeleting = (primKey: any, obj: any, transaction: Transaction) => {
     try {
       //      hookContext.onsuccess = () => console.log('Borrado Succes con PK:', primKey);
       //      hookContext.onerror = (error) =>
@@ -229,16 +229,9 @@ export class SlapBaseEntity {
     }
   };
 
-  static hookUpdating = (
-    modifications: any,
-    primKey: any,
-    obj: any,
-    transaction: Transaction,
-  ) => {
+  static hookUpdating = (modifications: any, primKey: any, obj: any, transaction: Transaction) => {
     try {
-      //      hookContext.onsuccess = (primKey) => console.log('Updating Succes con PK:', primKey);
-      //      hookContext.onerror = (error) =>
-      //        console.log(`Error en hookUpdating() -hookContext- de ${this.name}:`, error);
+      return modifications; //Devuelve las modificaciones para que Dexie las aplique
     } catch (error) {
       console.log(`Error en hookUpdating() de ${this.name}:`, error);
     }
@@ -257,23 +250,54 @@ export class SlapBaseEntity {
   protected get staticSelf() {
     return this.constructor as typeof SlapBaseEntity;
   }
+  static getStaticObjectData<T extends SlapBaseEntity>(
+    item: Partial<T>,
+    forSynchronization: boolean = false,
+  ) {
+    const copiaData: any = {};
+    const copiaMetaData: any = {};
+    const copiaKeys: any = {};
+    const copiaSystem: any = {};
+
+    for (const col of this._columns) {
+      if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
+        copiaData[col] = item[col];
+      }
+    }
+    for (const col of this._metadataColumns) {
+      if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
+        copiaMetaData[`${forSynchronization ? '_' : ''}${col}`] = item[col];
+      }
+    }
+    for (const col of this._keyColumns) {
+      if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
+        copiaKeys[`${forSynchronization ? (col === 'id' ? '' : '_pk_') : ''}${col}`] = item[col];
+      }
+    }
+    for (const col of this._systemColumns) {
+      if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
+        copiaSystem[`${forSynchronization ? '_' : ''}${col}`] = item[col];
+      }
+    }
+    return {
+      ...copiaKeys,
+      ...(forSynchronization ? copiaSystem : {}),
+      ...copiaData,
+      ...copiaMetaData,
+    };
+  }
 
   // --- MÉTODOS DE INSTANCIA (Dentro de SlapBaseEntity) ---
 
   getObjectData() {
-    const copiaDatos: any = {};
-    for (const col of this.staticSelf._columns) {
-      if (Object.prototype.hasOwnProperty.call(this, col) && typeof this[col] !== 'function') {
-        copiaDatos[col] = this[col];
-      }
-    }
-    return copiaDatos;
-  };
+    return this.staticSelf.getStaticObjectData(this);
+  }
+
   patch(obj: any) {
     for (const key in obj) {
       this[key] = obj[key];
     }
-  };
+  }
   /**
    * Guarda o actualiza la instancia actual en la base de datos.
    * Si no tiene ID y tienes un Hook de UUID, se le asignará uno.
@@ -281,6 +305,11 @@ export class SlapBaseEntity {
   async save(): Promise<string | number | undefined> {
     try {
       const table = this.staticSelf.table;
+      if (!this.id) {
+        if ('gengenerateId' in this && typeof this.generateId === 'function') {
+          this.id = await this.generateId();
+        } //Si no implementa custom generator ID, se le asignará un UUID en el hook de creación de la base de datos
+      }
       // Guardamos y recuperamos la PK resultante
       const pk = await table.put(this.getObjectData());
       // Si la base de datos generó o cambió el ID, lo actualizamos en la instancia
@@ -376,7 +405,7 @@ export class SlapBaseEntity {
   clone(): this | undefined {
     try {
       const constructor = this.staticSelf as unknown as new (data?: Partial<this>) => this;
-      const copy = new (constructor)(this);
+      const copy = new constructor(this);
       copy.id = null;
       return copy;
     } catch (error) {

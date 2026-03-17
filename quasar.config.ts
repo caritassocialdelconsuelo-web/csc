@@ -2,6 +2,7 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { defineConfig } from '#q-app/wrappers';
+//import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 export default defineConfig((/* ctx */) => {
   return {
@@ -11,7 +12,7 @@ export default defineConfig((/* ctx */) => {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
-    boot: ['auth-guard'],
+    boot: ['auth-guard' /*, 'node-polyfills-util' por ahora no usamos polyfill*/],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: ['app.scss'],
@@ -59,7 +60,30 @@ export default defineConfig((/* ctx */) => {
       // polyfillModulePreload: true,
       // distDir
 
-      // extendViteConf (viteConf) {},
+      /*  Intento fallido de usar pollyfill    extendViteConf(viteConf) {
+        viteConf.resolve = viteConf.resolve || {};
+        console.log(
+          'Extendiendo Vite config para agregar polyfills de Node.js... viteConf.resolve.alias:',
+          viteConf.resolve.alias,
+        );
+        viteConf.resolve.alias = {
+          ...viteConf.resolve.alias,
+          util: 'util',
+          process: 'process/browser',
+          buffer: 'buffer',
+        };
+        console.log('Así queda modificado... viteConf.resolve:', viteConf.resolve.alias);
+        viteConf.plugins?.push(
+          nodePolyfills({
+            globals: {
+              Buffer: true,
+              global: true,
+              process: true,
+            },
+            protocolImports: true,
+          }),
+        );
+      },*/
       // viteVuePluginOptions: {},
 
       vitePlugins: [
@@ -75,6 +99,12 @@ export default defineConfig((/* ctx */) => {
           { server: false },
         ],
       ],
+      // AÑADE ESTO:
+      rawViteConfig: {
+        optimizeDeps: {
+          include: ['util', 'events', 'buffer'],
+        },
+      },
       useFilenameHashes: false,
     },
 
@@ -99,7 +129,7 @@ export default defineConfig((/* ctx */) => {
       // directives: [],
 
       // Quasar plugins
-      plugins: [],
+      plugins: ['Notify'],
     },
 
     // animations: 'all', // --- includes all animations
