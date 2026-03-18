@@ -6,13 +6,14 @@ import { registerAutomaticConnect } from 'src/composables/useSession';
 import { useSupabase } from 'src/composables/useSupabase';
 import { EPerfil } from 'src/services/database/entities/perfil';
 // En tu archivo principal o donde se defina las clases ppales
-const modules = import.meta.glob(['/src/lib/sladb/*.ts', '/src/services/database/entities/*.ts'], { eager: true });
-
-
-
+const modules = import.meta.glob(['/src/lib/sladb/*.ts', '/src/services/database/entities/*.ts'], {
+  eager: true,
+});
 
 export default boot(({ router }) => {
-  const { supabase: { value: supabase } } = useSupabase();
+  const {
+    supabase: { value: supabase },
+  } = useSupabase();
   router.beforeEach(async (to) => {
     // 1. RESCATE MANUAL DEL TOKEN
     // Buscamos el token en cualquier parte del hash o de la ruta
@@ -84,7 +85,7 @@ export default boot(({ router }) => {
    */
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
-      registerAutomaticConnect(session);
+      await registerAutomaticConnect(session);
       const db = prepareDb(session.user.id);
       /*---------
       const p = new EPerfil({

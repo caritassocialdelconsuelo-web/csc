@@ -17,6 +17,11 @@ const supabase = ref<SupabaseClient>(
     // optional options object here
   ),
 );
+if (supabase.value) {
+  console.log('✅ Supabase Client inicializado correctamente.');
+} else {
+  console.error('❌ Error al inicializar Supabase Client. Verifica las variables de entorno.');
+}
 export function useSupabase() {
   return { supabase: supabase };
 }

@@ -28,7 +28,7 @@ export class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
       this.createdAt = this.staticSelf.getAt();
     } catch (error) {
       console.log(
-        `Error en constructor() de ${this.getThisClass().name}:`,
+        `Error en constructor() de la clase de la entidad ${this.getThisClass().entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -55,7 +55,7 @@ export class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
       } as Partial<this>);
     } catch (error) {
       console.log(
-        `Error en delete() de ${this.getThisClass().name}:`,
+        `Error en delete() de la clase de la entidad ${this.getThisClass().entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),

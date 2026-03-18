@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { Table } from "dexie";
-import { type SlapBaseEntity } from "./SlapBaseEntity";
+import type { Table } from 'dexie';
+import { type SlapBaseEntity } from './SlapBaseEntity';
 
 //export const registeredEntitys: {
 //  [key: string]: {
@@ -10,10 +10,11 @@ import { type SlapBaseEntity } from "./SlapBaseEntity";
 //  }
 //} = {};
 
-
 //Function de Register
 export const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<any, any>) => {
-  console.log(`registerEntity--->Registrando la clase: ${classEntity.name} en la tabla: ${table.name} de Dexie`);
+  console.log(
+    `registerEntity--->Registrando la clase de la entidad ${classEntity.entityName} en la tabla: ${table.name} de Dexie`,
+  );
   //Asocia la tabla de Dexie y la entidad
   classEntity.table = table;
   //Registramos Hooks
@@ -22,25 +23,23 @@ export const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<
   classEntity.table.hook(
     // Registramos el hook "creating"
     'creating',
-    classEntity.hookCreating
+    classEntity.hookCreating,
   );
   //Hook de borrado
   classEntity.table.hook(
     // Registramos el hook "deleting"
     'deleting',
-    classEntity.hookDeleting
+    classEntity.hookDeleting,
   );
 
   //Hook de updating
   classEntity.table.hook(
     // Registramos el hook "updating"
     'updating',
-    classEntity.hookUpdating
+    classEntity.hookUpdating,
   );
 
   //Hook de reading
 
-  classEntity.table.hook('reading',
-    classEntity.hookReading
-  );
+  classEntity.table.hook('reading', classEntity.hookReading);
 };

@@ -15,6 +15,7 @@ export class SlapBaseEntity {
   static table: Table<any, any>;
   static registrable: boolean = false; //Indica si esta clase se registra en la base de datos, por defecto es false, las clases que se quieran registrar deden usar el decorador @Entity, que setea este valor a true
   static registered: boolean = false; //Indica si esta clase ya se ha registrado en la base de datos, para evitar registros duplicados, se setea a true cuando se registra la clase
+  static entityName: string = ''; //Nombre de la entidad, se setea con el decorador @Entity
   static get schema() {
     return this._indexedColumns.length > 0 ? `${this._indexedColumns.join(',')}` : 'id';
   } //Definimos el schema base con ID y las columnas indexadas, las columnas indexadas se definen con el decorador @Column({indexed:true})
@@ -31,7 +32,7 @@ export class SlapBaseEntity {
       this.initializeMyData(data);
     } catch (error) {
       console.log(
-        `Error en constructor() de ${this.getThisClass().name}:`,
+        `Error en constructor() de la clase de la entidad ${this.getThisClass().entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -66,7 +67,7 @@ export class SlapBaseEntity {
       const observer$: Observable<T[]> = liveQuery(querier) as unknown as Observable<T[]>;
       return observer$;
     } catch (error) {
-      console.log(`Error en getLiveQuery$() de ${this.name}:`, error);
+      console.log(`Error en getLiveQuery$() de la clase de la entidad ${this.entityName}:`, error);
       // Fallback to an empty observable to keep return type consistent
       return liveQuery(() => []) as unknown as Observable<T[]>;
     }
@@ -98,7 +99,10 @@ export class SlapBaseEntity {
         $observer,
       };
     } catch (error) {
-      console.log(`Error en getLiveQueryWithParams$() de ${this.name}:`, error);
+      console.log(
+        `Error en getLiveQueryWithParams$() de la clase de la entidad ${this.entityName}:`,
+        error,
+      );
       // Fallback to an empty observable to keep return type consistent
       return {
         setNewParams: (newParams: { [key: string]: any }) => {
@@ -114,7 +118,7 @@ export class SlapBaseEntity {
     try {
       return await this.table.get(id);
     } catch (error) {
-      console.log(`Error en get() de ${this.name}:`, error);
+      console.log(`Error en get() de la clase de la entidad ${this.entityName}:`, error);
     }
   }
 
@@ -122,7 +126,7 @@ export class SlapBaseEntity {
     try {
       return await this.table.toArray();
     } catch (error) {
-      console.log(`Error en all() de ${this.name}:`, error);
+      console.log(`Error en all() de la clase de la entidad ${this.entityName}:`, error);
     }
   }
 
@@ -130,7 +134,7 @@ export class SlapBaseEntity {
     try {
       return await this.table.count();
     } catch (error) {
-      console.log(`Error en count() de ${this.name}:`, error);
+      console.log(`Error en count() de la clase de la entidad ${this.entityName}:`, error);
     }
   }
 
@@ -139,7 +143,10 @@ export class SlapBaseEntity {
     try {
       return await this.table.bulkAdd(entities);
     } catch (error) {
-      console.log(`Error en bulkAdd(entities: any[]) de ${this.name}:`, error);
+      console.log(
+        `Error en bulkAdd(entities: any[]) de la clase de la entidad ${this.entityName}:`,
+        error,
+      );
     }
   }
 
@@ -147,7 +154,10 @@ export class SlapBaseEntity {
     try {
       return await this.table.bulkPut(entities);
     } catch (error) {
-      console.log(`Error en bulkPut(entities: any[]) de ${this.name}:`, error);
+      console.log(
+        `Error en bulkPut(entities: any[]) de la clase de la entidad ${this.entityName}:`,
+        error,
+      );
     }
   }
 
@@ -155,7 +165,10 @@ export class SlapBaseEntity {
     try {
       return await this.table.bulkDelete(ids);
     } catch (error) {
-      console.log(`Error en bulkDelete(ids: any[]) de ${this.name}:`, error);
+      console.log(
+        `Error en bulkDelete(ids: any[]) de la clase de la entidad ${this.entityName}:`,
+        error,
+      );
     }
   }
 
@@ -164,7 +177,7 @@ export class SlapBaseEntity {
     try {
       return await this.table.clear();
     } catch (error) {
-      console.log(`Error en clear() de ${this.name}:`, error);
+      console.log(`Error en clear() de la clase de la entidad ${this.entityName}:`, error);
     }
   }
 
@@ -173,7 +186,10 @@ export class SlapBaseEntity {
     try {
       return this.table.where(index);
     } catch (error) {
-      console.log(`Error en where(index: string) de ${this.name}:`, error);
+      console.log(
+        `Error en where(index: string) de la clase de la entidad ${this.entityName}:`,
+        error,
+      );
     }
   }
 
@@ -181,7 +197,10 @@ export class SlapBaseEntity {
     try {
       return this.table.orderBy(index);
     } catch (error) {
-      console.log(`Error en orderBy(index: string) de ${this.name}:`, error);
+      console.log(
+        `Error en orderBy(index: string) de la clase de la entidad ${this.entityName}:`,
+        error,
+      );
     }
   }
 
@@ -190,7 +209,7 @@ export class SlapBaseEntity {
     try {
       return await this.table.where('estado').equals(estado).toArray();
     } catch (error) {
-      console.log(`Error en filterByEstado de ${this.name}:`, error);
+      console.log(`Error en filterByEstado de la clase de la entidad ${this.entityName}:`, error);
     }
   }
 
@@ -199,7 +218,7 @@ export class SlapBaseEntity {
     try {
       return await this.table.count();
     } catch (error) {
-      console.log(`Error en contar() de ${this.name}:`, error);
+      console.log(`Error en contar() de la clase de la entidad ${this.entityName}:`, error);
     }
   }
   //Metodos estaticos de ayuda
@@ -215,7 +234,7 @@ export class SlapBaseEntity {
       }
       return obj.id; //Devuelve la PK para que Dexie la use
     } catch (error) {
-      console.log(`Error en hookCreate() de ${this.name}:`, error);
+      console.log(`Error en hookCreate() de la clase de la entidad ${this.entityName}:`, error);
     }
   };
 
@@ -223,9 +242,9 @@ export class SlapBaseEntity {
     try {
       //      hookContext.onsuccess = () => console.log('Borrado Succes con PK:', primKey);
       //      hookContext.onerror = (error) =>
-      //        console.log(`Error en hookDeleting() -hookContext- de ${this.name}:`, error);
+      //        console.log(`Error en hookDeleting() -hookContext- de ${this.entityName}:`, error);
     } catch (error) {
-      console.log(`Error en hookDeleting() de ${this.name}:`, error);
+      console.log(`Error en hookDeleting() de la clase de la entidad ${this.entityName}:`, error);
     }
   };
 
@@ -233,7 +252,7 @@ export class SlapBaseEntity {
     try {
       return modifications; //Devuelve las modificaciones para que Dexie las aplique
     } catch (error) {
-      console.log(`Error en hookUpdating() de ${this.name}:`, error);
+      console.log(`Error en hookUpdating() de la clase de la entidad ${this.entityName}:`, error);
     }
   };
 
@@ -241,7 +260,7 @@ export class SlapBaseEntity {
     try {
       return obj;
     } catch (error) {
-      console.log(`Error en hookReading() de ${this.name}:`, error);
+      console.log(`Error en hookReading() de la clase de la entidad ${this.entityName}:`, error);
     }
   };
 
@@ -319,7 +338,7 @@ export class SlapBaseEntity {
       return pk;
     } catch (error) {
       console.log(
-        `Error en save() de ${this.staticSelf.name}:`,
+        `Error en save() de la clase de la entidad ${this.staticSelf.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -338,7 +357,7 @@ export class SlapBaseEntity {
       await this.staticSelf.table.delete(this.id);
     } catch (error) {
       console.log(
-        `Error en delete() de ${this.staticSelf.name}:`,
+        `Error en delete() de la clase de la entidad ${this.staticSelf.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -366,7 +385,7 @@ export class SlapBaseEntity {
       return updatedCount;
     } catch (error) {
       console.log(
-        `Error en update() de ${this.staticSelf.name}:`,
+        `Error en update() de la clase de la entidad ${this.staticSelf.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -390,7 +409,7 @@ export class SlapBaseEntity {
       return undefined;
     } catch (error) {
       console.log(
-        `Error en reload() de ${this.staticSelf.name}:`,
+        `Error en reload() de la clase de la entidad ${this.staticSelf.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -410,7 +429,7 @@ export class SlapBaseEntity {
       return copy;
     } catch (error) {
       console.log(
-        `Error en clone() de ${this.staticSelf.name}:`,
+        `Error en clone() de la clase de la entidad ${this.staticSelf.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),

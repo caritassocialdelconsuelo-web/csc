@@ -9,7 +9,7 @@ export type EstadoPerfil = 'activo' | 'inactivo' | 'suspendido';
 export type TemaApp = 'light' | 'dark' | 'system';
 
 // 1. Define los tipos literales explícitamente
-@Entity('TPerfil')
+@Entity('Perfil', 'TPerfil')
 export class EPerfil
   extends SlapBaseEntityWithReplycation
   implements ICustomGeneratorID, ICustomScriptCode

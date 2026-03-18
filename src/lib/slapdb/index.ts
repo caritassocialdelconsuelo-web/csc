@@ -5,11 +5,18 @@ import Dexie, { type Table } from 'dexie';
 import { registerEntity } from './register';
 import { type SlapBaseEntity } from './SlapBaseEntity';
 import { isSubclass, type Metaclass } from '../utils';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  REALTIME_LISTEN_TYPES,
+  REALTIME_SUBSCRIBE_STATES,
+  type RealtimeChannel,
+  type SupabaseClient,
+  type SupabaseClientOptions,
+} from '@supabase/supabase-js';
 import { sync } from 'glob/raw';
+import { type IRealtimeSynchronize } from './SlapTypes';
 
 //**********************Clase de base de datos generica
-export class SlapDB extends Dexie {
+export class SlapDB extends Dexie implements IRealtimeSynchronize {
   [key: string]: any; //Define un diccionario dinámico para la clase
   public static entities: {
     [key: string]: {
@@ -17,14 +24,14 @@ export class SlapDB extends Dexie {
       localTableName: string;
     };
   } = {}; //Diccionario para almacenar las entidades registradas y sus nombres de tabla locales
-
+  private static channel: RealtimeChannel;
   static registerEntity(classEntity: Metaclass<typeof SlapBaseEntity>, localTableName: string) {
-    this.entities[classEntity.name] = {
+    this.entities[classEntity.entityName] = {
       baseClass: classEntity,
       localTableName,
     };
     console.log(
-      `SlapDB.registerEntity--->PreRegistrando la clase: ${classEntity.name} en la tabla: ${localTableName} de Dexie`,
+      `SlapDB.registerEntity--->PreRegistrando la clase de la entidad ${classEntity.entityName} en la tabla: ${localTableName} de Dexie`,
     );
   }
   static async migrate(supabase: SupabaseClient<any, 'public', 'public', any, any>) {
@@ -96,7 +103,7 @@ export class SlapDB extends Dexie {
 
       //Registra la tabla local de control de sincronización
       this.version(this.verno || 0).stores({
-        ['_sync_meta']: 'id,checkpoint',
+        ['_sync_meta']: 'id,checkpoint,tid',
       });
 
       Object.keys(entities).forEach((key) => {
@@ -133,7 +140,7 @@ export class SlapDB extends Dexie {
         registerEntity(baseClass, this[localTableName] as Table<any, any>);
       } else {
         console.log(
-          `La clase ${baseClass.name} ya ha sido registrada o no es registrable. (registerOneEntity)`,
+          `La clase de la entidad ${baseClass.entityName} ya ha sido registrada o no es registrable. (registerOneEntity)`,
         );
       }
     } catch (error) {
@@ -158,7 +165,7 @@ export class SlapDB extends Dexie {
         ((synClass._keyColumns?.length ?? 0) > 0 ? synClass._keyColumns?.[0] : 'id') ?? 'id'; //Obtenemos la columna clave de la entidad, por defecto 'id'
 
       const syncTableName = synClass.syncTableName; //Obtenemos el nombre de la tabla remota desde la clase
-      const localTableName = this.staticSelf.entities[synClass.name]?.localTableName ?? ''; //Obtenemos el nombre de la tabla local desde el registro de entidades
+      const localTableName = this.staticSelf.entities[synClass.entityName]?.localTableName ?? ''; //Obtenemos el nombre de la tabla local desde el registro de entidades
       const syncMeta = await this.table('_sync_meta').get(localTableName);
       const lastCp = syncMeta?.checkpoint || 0;
 
@@ -223,13 +230,112 @@ export class SlapDB extends Dexie {
           await tx.table('_sync_meta').put({
             id: localTableName,
             checkpoint: data.new_checkpoint,
+            tid: data.iod,
           });
         },
       );
       return data.errors;
     }
   }
+
+  async runFullSync(supabase: SupabaseClient<any, any, 'public', any, any>) {
+    // Verificamos si realmente hay red antes de intentar
+    if (!navigator.onLine) {
+      console.warn('⚠️ No hay conexión a internet. No se puede sincronizar.');
+      return;
+    }
+
+    console.log('🔄 SlapDb: Iniciando sincronización total...');
+
+    const synClasses = Object.values(this.staticSelf.entities)
+      .map(({ baseClass }) => baseClass)
+      .filter((baseClass) => isSubclass(baseClass, SlapBaseEntityWithReplycation));
+
+    for (const synClass of synClasses) {
+      try {
+        const errors = await this.syncTable(supabase, synClass as any);
+
+        if (errors && errors.length > 0) {
+          console.warn(`⚠️ Conflictos sincronizando en la entidad ${synClass.entityName}:`, errors);
+        }
+      } catch (error) {
+        console.error(`❌ Error sincronizando tabla de la entidad ${synClass.entityName}:`, error);
+      }
+    }
+
+    // Reintenta la sincronización después de un tiempo
+    setTimeout(
+      () => {
+        void this.runFullSync(supabase);
+      },
+      import.meta.env.VITE_SUPABASE_MS_RETRY || 1000,
+    );
+  }
+
+  async realtimeSyncSetup(supabase: SupabaseClient<any, any, 'public', any, any>) {
+    if (this.staticSelf.channel) {
+      console.log(
+        '⚠️ Realtime ya está configurado para esta base de datos. Evitando configuración duplicada.',
+      );
+      await supabase.removeChannel(this.staticSelf.channel);
+    }
+    this.staticSelf.channel = supabase.channel(`slbSync`, {
+      config: {
+        broadcast: {
+          self: true, // <--- ESTO permite que el emisor reciba su propio mensaje
+        },
+      },
+    });
+    console.log(`🔔 Configurando Realtime para toda la base de datos`);
+    this.staticSelf.channel
+      .on(
+        REALTIME_LISTEN_TYPES.BROADCAST,
+        {
+          event: '*',
+        },
+        (payload) => {
+          // Si recibimos un cambio y no somos nosotros (basado en el checkpoint)
+          void this.realtimeHandle(supabase, payload); //Ejecutamos la promesa sin esperar su resultado para no bloquear el hilo de eventos
+        },
+      )
+      .subscribe((status) => {
+        if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+          console.log(`✅ Conectado a Realtime para toda la base de datos`);
+          // Al conectar o reconectar el socket, disparamos sync para recuperar lo perdido en el downtime
+          void this.runFullSync(supabase); //Ejecutamos la promesa sin esperar su resultado para no bloquear el hilo de eventos
+        }
+
+        if (status === REALTIME_SUBSCRIBE_STATES.CLOSED) {
+          console.warn('⚠️ Conexión con Supabase perdida.');
+        }
+      });
+  }
+
+  async realtimeHandle(supabase: SupabaseClient<any, any, 'public', any, any>, payload: unknown) {
+    const t = (payload as any).payload.t;
+    const c = (payload as any).payload.c;
+    const table_data = (this._sync_meta as Table).where('tid').equals(t);
+    // Aquí puedes implementar la lógica para manejar los cambios en tiempo real, por ejemplo:
+    const primerRegistro = await table_data.first();
+    if (c > primerRegistro?.checkpoint) {
+      //syncronizamos sólo aquellas tablas que son avisadas de un checkpoint mayor. Esto evita sincronizaciones innecesarias y mejora el rendimiento.
+      await this.syncTable(
+        supabase,
+        this.staticSelf.entities[primerRegistro.id]
+          ?.baseClass as unknown as SlapBaseEntityWithReplycation,
+      );
+    }
+  }
+
+  async handleOnline(supabase: SupabaseClient<any, any, 'public', any, any>) {
+    await this.runFullSync(supabase);
+    await this.realtimeSyncSetup(supabase);
+  }
+  handleOffline() {
+    console.warn('⚠️ Sin conexión a internet. Trabajando en modo local.');
+  }
 }
+
 //CallBackFunction para crear la base de datos, se le pasa a useDatabase
 export const createSlapDBCallBack = (config: { [key: string]: any }) => {
   if (!config.name) {

@@ -2,7 +2,9 @@ import type { Session } from '@supabase/supabase-js';
 import { useSupabase } from './useSupabase';
 import { ref } from 'vue';
 
-const { supabase: { value: supabase } } = useSupabase();
+const {
+  supabase: { value: supabase },
+} = useSupabase();
 const session = ref<Session | null>();
 
 export async function useSession() {
@@ -20,8 +22,16 @@ export async function useSession() {
   }
   return { session };
 }
-export const registerAutomaticConnect = (newSession: Session | null) => {
+export const registerAutomaticConnect = async (newSession: Session | null) => {
   if (!session.value && newSession) {
     session.value = newSession;
+    if (supabase) {
+      //Aqui registra el realtime cuando se detecta una nueva sesión, lo que es útil para mantener la conexión en tiempo real incluso después de recargar la página o iniciar sesión por primera vez.
+      await supabase.realtime.setAuth(); //Conecta con realtime usando el token almacenado (si existe) para mantener la sesión activa incluso después de recargar la página. Esto es crucial para que las funcionalidades de sincronización en tiempo real sigan funcionando sin interrupciones.
+    } else {
+      console.warn(
+        '⚠️ Supabase no está inicializado. No se puede configurar Realtime con la nueva sesión.',
+      );
+    }
   }
-}
+};

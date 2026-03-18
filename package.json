@@ -14,6 +14,7 @@
     "build": "quasar build",
     "db:sync": "tsx \"./src/lib/slapdb/scripts/migration.ts\" && echo \"✅ Sincronización de base de datos completada\"",
     "buildpwa": "quasar build -m pwa",
+    "servepwa": "quasar serve ./dist/pwa --https",
     "buildpwadebug": "quasar build -m pwa --debug",
     "devpwa": "quasar dev -m pwa",
     "postinstall": "quasar prepare"
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@eslint/js": "^9.14.0",
     "@quasar/app-vite": "^2.1.0",
+    "@quasar/cli": "^2.5.0",
     "@types/node": "^20.5.9",
     "@types/prompts": "^2.4.9",
     "@vue/eslint-config-prettier": "^10.1.0",

@@ -4,7 +4,7 @@ import type { Metaclass } from '../utils';
 import { type SlapBaseEntity } from './SlapBaseEntity';
 
 // 1. Decorador de clase para marcar una clase como entidad de la base de datos
-export function Entity(syncTableName: string) {
+export function Entity(entityName: string, syncTableName: string) {
   //console.log(`Decorador @Entity aplicado a la clase: (syncTableName: ${syncTableName})`);
   return function <T extends new (...args: any[]) => SlapBaseEntity>(constructor: T) {
     // 2. Retornar el decorador de clase (recibe el constructor original)
@@ -23,20 +23,26 @@ export function Entity(syncTableName: string) {
     };
     //4. Definimos el nombre dinámicamente en la propiedad 'name'
     Object.defineProperty(claseEntidadHija, 'name', {
-      value: `${constructor.name}_DynEntity`,
+      value: `${entityName}_DynEntity`,
       configurable: true,
     });
     (claseEntidadHija as any).registrable = true; //Indicamos que esta clase se debe registrar en la base de datos
     (claseEntidadHija as any).registered = false; //Indicamos que esta clase aún no se ha registrado en la base de datos
     if ('syncTableName' in constructor) {
       (constructor as any).syncTableName = syncTableName;
-    } //Solo lo agrega si la clase tiene el campo syncTableName, para no agregarlo a las entidades que no lo necesitan
+    } //Solo lo agrega si la clase tiene el campo entityName, para no agregarlo a las entidades que no lo necesitan
+    if ('entityName' in constructor) {
+      (constructor as any).entityName = entityName;
+    }
+
     //5. Registramos la clase hija (con el mismo nombre) para que SlapDB la reconozca
     SlapDB.registerEntity(
       claseEntidadHija as unknown as Metaclass<typeof SlapBaseEntity>,
-      constructor.name,
+      entityName,
     );
-    console.log(`Se ha Pre-Registrado la clase: ${constructor.name} (decorador)`);
+    console.log(
+      `Se ha Pre-Registrado la clase de la entidad ${entityName}: clase-> ${constructor.name} (decorador)`,
+    );
     return claseEntidadHija;
   };
 }
