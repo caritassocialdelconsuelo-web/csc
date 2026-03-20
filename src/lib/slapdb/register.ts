@@ -13,27 +13,27 @@ import { type SlapBaseEntity } from './SlapBaseEntity';
 //Function de Register
 export const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<any, any>) => {
   console.log(
-    `registerEntity--->Registrando la clase de la entidad ${classEntity.entityName} en la tabla: ${table.name} de Dexie`,
+    `registerEntity--->Registrando la clase de la entidad ${classEntity._configuration.schemaInfo.entityName} en la tabla: ${table.name} de Dexie`,
   );
   //Asocia la tabla de Dexie y la entidad
-  classEntity.table = table;
+  classEntity._configuration.dbstate.table = table;
   //Registramos Hooks
 
   //Hook de creación
-  classEntity.table.hook(
+  classEntity._configuration.dbstate.table.hook(
     // Registramos el hook "creating"
     'creating',
     classEntity.hookCreating,
   );
   //Hook de borrado
-  classEntity.table.hook(
+  classEntity._configuration.dbstate.table.hook(
     // Registramos el hook "deleting"
     'deleting',
     classEntity.hookDeleting,
   );
 
   //Hook de updating
-  classEntity.table.hook(
+  classEntity._configuration.dbstate.table.hook(
     // Registramos el hook "updating"
     'updating',
     classEntity.hookUpdating,
@@ -41,5 +41,5 @@ export const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<
 
   //Hook de reading
 
-  classEntity.table.hook('reading', classEntity.hookReading);
+  classEntity._configuration.dbstate.table.hook('reading', classEntity.hookReading);
 };

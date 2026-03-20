@@ -22,12 +22,19 @@ export interface IRealtimeSynchronize {
 export interface IDictionary<T> {
   [key: string]: T;
 }
+export type TColumnType = 'metadata' | 'data' | 'key' | 'system';
+
+export interface IColumnDescriptor {
+  name: string;
+  indexed: boolean;
+  tipo: TColumnType
+}
 export interface IConfigSlapEntity {
   schemaInfo: {
-    columns: IDictionary<string>;
-    metadataColumns: IDictionary<string>;
-    keyColumns: IDictionary<string>;
-    systemColumns: IDictionary<string>;
+    columns: IDictionary<IColumnDescriptor>;
+    metadataColumns: IDictionary<IColumnDescriptor>;
+    keyColumns: IDictionary<IColumnDescriptor>;
+    systemColumns: IDictionary<IColumnDescriptor>;
     indexedColumns: IDictionary<string>; //Lista de columnas que se deben indexar en la base de datos, se setea con el decorador @Column({indexed:true})
     indexCompositeKeys: IDictionary<string[]>; //Objeto que define las claves compuestas para índices, la clave es el nombre del índice y el valor es un array de columnas que forman la clave compuesta, se setea con el decorador @Column({indexComposite:'indexName'})
     entityName: string; //Nombre de la entidad, se setea con el decorador @Entity

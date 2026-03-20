@@ -1,18 +1,54 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Table, liveQuery, Transaction, Observable } from 'dexie';
+import { liveQuery, Transaction, Observable } from 'dexie';
 import { BehaviorSubject, debounceTime, distinctUntilChanged, switchMap, from } from 'rxjs';
 import { Column } from './decorators';
-import { useDatabase } from 'src/composables/useDb';
 import { IConfigSlapEntity, IDataSlapEntity } from './SlapTypes';
+import { mergeObjects } from '../utils';
 
 //Clase base para todas las entidades con ID generado por UUID
 export class SlapBaseEntity {
-  static _configuration: IConfigSlapEntity;
   static _data: IDataSlapEntity;
+  static _myConfiguration: IConfigSlapEntity;
+  protected static checkMyConfiguration() {
+    if (!Object.hasOwn(this, '_myConfiguration')) {
+      Object.defineProperty(this, '_myConfiguration', {
+        value: {
+          schemaInfo:
+          {
+            entityName: this.name,
+            columns: {},
+            metadataColumns: {},
+            keyColumns: {},
+            systemColumns: {},
+            indexedColumns: {},
+            indexCompositeKeys: {},
+
+          },
+          dbstate: {
+          }
+        },
+        enumerable: true,
+        writable: true
+      }
+      );
+    }
+    return this._myConfiguration;
+  }
+  public static get _configuration(): IConfigSlapEntity {
+    return this.checkMyConfiguration();
+  }
+  public static set _configuration(newVal: IConfigSlapEntity) {
+    if (this.checkMyConfiguration()) {
+      this._myConfiguration = newVal;
+    }
+  }
+  public static get _composeConfiguration(): IConfigSlapEntity {
+    return mergeObjects(Object.getPrototypeOf(this)?._composeConfiguration || {}, this._configuration)
+  }
 
   static get schema() {
-    return Object.keys(this._configuration.schemaInfo.indexedColumns).join(',') || 'id';
+    return Object.keys(this._composeConfiguration.schemaInfo.indexedColumns).join(',') || 'id';
   } //Definimos el schema base con ID y las columnas indexadas, las columnas indexadas se definen con el decorador @Column({indexed:true})
 
   [key: string]: any; //Define un diccionario dinámico para la clase
@@ -306,7 +342,7 @@ export class SlapBaseEntity {
     const copiaKeys: any = {};
     const copiaSystem: any = {};
 
-    for (const col in this._configuration.schemaInfo.columns) {
+    for (const col in this._composeConfiguration.schemaInfo.columns) {
       if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
         copiaData[col] = item[col];
       }

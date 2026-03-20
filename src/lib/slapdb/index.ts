@@ -10,9 +10,7 @@ import {
   REALTIME_SUBSCRIBE_STATES,
   type RealtimeChannel,
   type SupabaseClient,
-  type SupabaseClientOptions,
 } from '@supabase/supabase-js';
-import { sync } from 'glob/raw';
 import { type IRealtimeSynchronize } from './SlapTypes';
 
 //**********************Clase de base de datos generica
@@ -26,12 +24,12 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
   } = {}; //Diccionario para almacenar las entidades registradas y sus nombres de tabla locales
   private static channel: RealtimeChannel;
   static registerEntity(classEntity: Metaclass<typeof SlapBaseEntity>, localTableName: string) {
-    this.entities[classEntity.entityName] = {
+    this.entities[classEntity._composeConfiguration.schemaInfo.entityName] = {
       baseClass: classEntity,
       localTableName,
     };
     console.log(
-      `SlapDB.registerEntity--->PreRegistrando la clase de la entidad ${classEntity.entityName} en la tabla: ${localTableName} de Dexie`,
+      `SlapDB.registerEntity--->PreRegistrando la clase de la entidad ${classEntity._composeConfiguration.schemaInfo.entityName} en la tabla: ${localTableName} de Dexie`,
     );
   }
   static async migrate(supabase: SupabaseClient<any, 'public', 'public', any, any>) {
@@ -127,8 +125,8 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
   }) {
     try {
       const currentVersion = this.verno || 0;
-      if (baseClass.registrable && !baseClass.registered) {
-        baseClass.registered = true; //Indicamos que esta clase ya se ha registrado en la base de datos
+      if (baseClass._configuration.dbstate.registrable && !baseClass._configuration.dbstate.registered) {
+        baseClass._configuration.dbstate.registered = true; //Indicamos que esta clase ya se ha registrado en la base de datos
         // Definimos el store
         this.version(currentVersion).stores({
           [localTableName]: baseClass.schema,
@@ -140,7 +138,7 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
         registerEntity(baseClass, this[localTableName] as Table<any, any>);
       } else {
         console.log(
-          `La clase de la entidad ${baseClass.entityName} ya ha sido registrada o no es registrable. (registerOneEntity)`,
+          `La clase de la entidad ${baseClass._composeConfiguration.schemaInfo.entityName} ya ha sido registrada o no es registrable. (registerOneEntity)`,
         );
       }
     } catch (error) {
@@ -162,10 +160,10 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
   ) {
     if (synClass && isSubclass(synClass, SlapBaseEntityWithReplycation)) {
       const entityKeyColumn =
-        ((synClass._keyColumns?.length ?? 0) > 0 ? synClass._keyColumns?.[0] : 'id') ?? 'id'; //Obtenemos la columna clave de la entidad, por defecto 'id'
+        ((synClass._composeConfiguration.schemaInfo.keyColumns?.length ?? 0) > 0 ? synClass._composeConfiguration.schemaInfo.keyColumns?.[0] : 'id') ?? 'id'; //Obtenemos la columna clave de la entidad, por defecto 'id'
 
-      const syncTableName = synClass.syncTableName; //Obtenemos el nombre de la tabla remota desde la clase
-      const localTableName = this.staticSelf.entities[synClass.entityName]?.localTableName ?? ''; //Obtenemos el nombre de la tabla local desde el registro de entidades
+      const syncTableName = synClass._composeConfiguration.dbstate.syncTableName; //Obtenemos el nombre de la tabla remota desde la clase
+      const localTableName = this.staticSelf.entities[synClass._composeConfiguration.schemaInfo.entityName]?.localTableName ?? ''; //Obtenemos el nombre de la tabla local desde el registro de entidades
       const syncMeta = await this.table('_sync_meta').get(localTableName);
       const lastCp = syncMeta?.checkpoint || 0;
 
@@ -256,10 +254,10 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
         const errors = await this.syncTable(supabase, synClass as any);
 
         if (errors && errors.length > 0) {
-          console.warn(`⚠️ Conflictos sincronizando en la entidad ${synClass.entityName}:`, errors);
+          console.warn(`⚠️ Conflictos sincronizando en la entidad ${synClass._composeConfiguration.schemaInfo.entityName}:`, errors);
         }
       } catch (error) {
-        console.error(`❌ Error sincronizando tabla de la entidad ${synClass.entityName}:`, error);
+        console.error(`❌ Error sincronizando tabla de la entidad ${synClass._composeConfiguration.schemaInfo.entityName}:`, error);
       }
     }
 
