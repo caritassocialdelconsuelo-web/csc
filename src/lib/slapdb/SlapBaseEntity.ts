@@ -4,20 +4,15 @@ import { Table, liveQuery, Transaction, Observable } from 'dexie';
 import { BehaviorSubject, debounceTime, distinctUntilChanged, switchMap, from } from 'rxjs';
 import { Column } from './decorators';
 import { useDatabase } from 'src/composables/useDb';
+import { IConfigSlapEntity, IDataSlapEntity } from './SlapTypes';
 
 //Clase base para todas las entidades con ID generado por UUID
 export class SlapBaseEntity {
-  static _columns: string[] = [];
-  static _metadataColumns: string[] = [];
-  static _keyColumns: string[] = [];
-  static _systemColumns: string[] = [];
-  static _indexedColumns: string[] = []; //Lista de columnas que se deben indexar en la base de datos, se setea con el decorador @Column({indexed:true})
-  static table: Table<any, any>;
-  static registrable: boolean = false; //Indica si esta clase se registra en la base de datos, por defecto es false, las clases que se quieran registrar deden usar el decorador @Entity, que setea este valor a true
-  static registered: boolean = false; //Indica si esta clase ya se ha registrado en la base de datos, para evitar registros duplicados, se setea a true cuando se registra la clase
-  static entityName: string = ''; //Nombre de la entidad, se setea con el decorador @Entity
+  static _configuration: IConfigSlapEntity;
+  static _data: IDataSlapEntity;
+
   static get schema() {
-    return this._indexedColumns.length > 0 ? `${this._indexedColumns.join(',')}` : 'id';
+    return Object.keys(this._configuration.schemaInfo.indexedColumns).join(',') || 'id';
   } //Definimos el schema base con ID y las columnas indexadas, las columnas indexadas se definen con el decorador @Column({indexed:true})
 
   [key: string]: any; //Define un diccionario dinámico para la clase
@@ -67,7 +62,10 @@ export class SlapBaseEntity {
       const observer$: Observable<T[]> = liveQuery(querier) as unknown as Observable<T[]>;
       return observer$;
     } catch (error) {
-      console.log(`Error en getLiveQuery$() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en getLiveQuery$() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
       // Fallback to an empty observable to keep return type consistent
       return liveQuery(() => []) as unknown as Observable<T[]>;
     }
@@ -100,7 +98,7 @@ export class SlapBaseEntity {
       };
     } catch (error) {
       console.log(
-        `Error en getLiveQueryWithParams$() de la clase de la entidad ${this.entityName}:`,
+        `Error en getLiveQueryWithParams$() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
         error,
       );
       // Fallback to an empty observable to keep return type consistent
@@ -116,35 +114,44 @@ export class SlapBaseEntity {
   // Lectura
   static async get(id: any) {
     try {
-      return await this.table.get(id);
+      return await this._configuration.dbstate.table.get(id);
     } catch (error) {
-      console.log(`Error en get() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en get() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   }
 
   static async all() {
     try {
-      return await this.table.toArray();
+      return await this._configuration.dbstate.table.toArray();
     } catch (error) {
-      console.log(`Error en all() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en all() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   }
 
   static async count(): Promise<number | undefined> {
     try {
-      return await this.table.count();
+      return await this._configuration.dbstate.table.count();
     } catch (error) {
-      console.log(`Error en count() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en count() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   }
 
   // Escritura Masiva
   static async bulkAdd(entities: any[]) {
     try {
-      return await this.table.bulkAdd(entities);
+      return await this._configuration.dbstate.table.bulkAdd(entities);
     } catch (error) {
       console.log(
-        `Error en bulkAdd(entities: any[]) de la clase de la entidad ${this.entityName}:`,
+        `Error en bulkAdd(entities: any[]) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -152,10 +159,10 @@ export class SlapBaseEntity {
 
   static async bulkPut(entities: any[]) {
     try {
-      return await this.table.bulkPut(entities);
+      return await this._configuration.dbstate.table.bulkPut(entities);
     } catch (error) {
       console.log(
-        `Error en bulkPut(entities: any[]) de la clase de la entidad ${this.entityName}:`,
+        `Error en bulkPut(entities: any[]) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -163,10 +170,10 @@ export class SlapBaseEntity {
 
   static async bulkDelete(ids: any[]) {
     try {
-      return await this.table.bulkDelete(ids);
+      return await this._configuration.dbstate.table.bulkDelete(ids);
     } catch (error) {
       console.log(
-        `Error en bulkDelete(ids: any[]) de la clase de la entidad ${this.entityName}:`,
+        `Error en bulkDelete(ids: any[]) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -175,19 +182,22 @@ export class SlapBaseEntity {
   // Limpieza
   static async clear() {
     try {
-      return await this.table.clear();
+      return await this._configuration.dbstate.table.clear();
     } catch (error) {
-      console.log(`Error en clear() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en clear() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   }
 
   // Consultas Rápidas
   static where(index: string) {
     try {
-      return this.table.where(index);
+      return this._configuration.dbstate.table.where(index);
     } catch (error) {
       console.log(
-        `Error en where(index: string) de la clase de la entidad ${this.entityName}:`,
+        `Error en where(index: string) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -195,10 +205,10 @@ export class SlapBaseEntity {
 
   static orderBy(index: string) {
     try {
-      return this.table.orderBy(index);
+      return this._configuration.dbstate.table.orderBy(index);
     } catch (error) {
       console.log(
-        `Error en orderBy(index: string) de la clase de la entidad ${this.entityName}:`,
+        `Error en orderBy(index: string) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -207,18 +217,24 @@ export class SlapBaseEntity {
   // Métodos personalizados de tu lógica SlapDb
   static async filterByEstado(estado: string) {
     try {
-      return await this.table.where('estado').equals(estado).toArray();
+      return await this._configuration.dbstate.table.where('estado').equals(estado).toArray();
     } catch (error) {
-      console.log(`Error en filterByEstado de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en filterByEstado de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   }
 
   // Método estático universal para contar registros
   static async contar(): Promise<number | undefined> {
     try {
-      return await this.table.count();
+      return await this._configuration.dbstate.table.count();
     } catch (error) {
-      console.log(`Error en contar() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en contar() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   }
   //Metodos estaticos de ayuda
@@ -234,7 +250,10 @@ export class SlapBaseEntity {
       }
       return obj.id; //Devuelve la PK para que Dexie la use
     } catch (error) {
-      console.log(`Error en hookCreate() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en hookCreate() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   };
 
@@ -244,7 +263,10 @@ export class SlapBaseEntity {
       //      hookContext.onerror = (error) =>
       //        console.log(`Error en hookDeleting() -hookContext- de ${this.entityName}:`, error);
     } catch (error) {
-      console.log(`Error en hookDeleting() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en hookDeleting() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   };
 
@@ -252,7 +274,10 @@ export class SlapBaseEntity {
     try {
       return modifications; //Devuelve las modificaciones para que Dexie las aplique
     } catch (error) {
-      console.log(`Error en hookUpdating() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en hookUpdating() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   };
 
@@ -260,7 +285,10 @@ export class SlapBaseEntity {
     try {
       return obj;
     } catch (error) {
-      console.log(`Error en hookReading() de la clase de la entidad ${this.entityName}:`, error);
+      console.log(
+        `Error en hookReading() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        error,
+      );
     }
   };
 
@@ -278,22 +306,22 @@ export class SlapBaseEntity {
     const copiaKeys: any = {};
     const copiaSystem: any = {};
 
-    for (const col of this._columns) {
+    for (const col in this._configuration.schemaInfo.columns) {
       if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
         copiaData[col] = item[col];
       }
     }
-    for (const col of this._metadataColumns) {
+    for (const col in this._configuration.schemaInfo.metadataColumns) {
       if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
         copiaMetaData[`${forSynchronization ? '_' : ''}${col}`] = item[col];
       }
     }
-    for (const col of this._keyColumns) {
+    for (const col in this._configuration.schemaInfo.keyColumns) {
       if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
         copiaKeys[`${forSynchronization ? (col === 'id' ? '' : '_pk_') : ''}${col}`] = item[col];
       }
     }
-    for (const col of this._systemColumns) {
+    for (const col in this._configuration.schemaInfo.systemColumns) {
       if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
         copiaSystem[`${forSynchronization ? '_' : ''}${col}`] = item[col];
       }
@@ -323,7 +351,7 @@ export class SlapBaseEntity {
    */
   async save(): Promise<string | number | undefined> {
     try {
-      const table = this.staticSelf.table;
+      const table = this.staticSelf._configuration.dbstate.table;
       if (!this.id) {
         if ('gengenerateId' in this && typeof this.generateId === 'function') {
           this.id = await this.generateId();
@@ -338,7 +366,7 @@ export class SlapBaseEntity {
       return pk;
     } catch (error) {
       console.log(
-        `Error en save() de la clase de la entidad ${this.staticSelf.entityName}:`,
+        `Error en save() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -354,10 +382,10 @@ export class SlapBaseEntity {
       if (!this.id) {
         throw new Error('No se puede eliminar una instancia que no tiene ID (no existe en DB).');
       }
-      await this.staticSelf.table.delete(this.id);
+      await this.staticSelf._configuration.dbstate.table.delete(this.id);
     } catch (error) {
       console.log(
-        `Error en delete() de la clase de la entidad ${this.staticSelf.entityName}:`,
+        `Error en delete() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -376,7 +404,10 @@ export class SlapBaseEntity {
       }
 
       // Aplicamos los cambios a la DB
-      const updatedCount = await this.staticSelf.table.update(this.id, changes);
+      const updatedCount = await this.staticSelf._configuration.dbstate.table.update(
+        this.id,
+        changes,
+      );
 
       // Si la DB se actualizó, aplicamos los cambios también a esta instancia en memoria
       if (updatedCount) {
@@ -385,7 +416,7 @@ export class SlapBaseEntity {
       return updatedCount;
     } catch (error) {
       console.log(
-        `Error en update() de la clase de la entidad ${this.staticSelf.entityName}:`,
+        `Error en update() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -401,7 +432,7 @@ export class SlapBaseEntity {
     try {
       if (!this.id) return undefined;
 
-      const freshData = await this.staticSelf.table.get(this.id);
+      const freshData = await this.staticSelf._configuration.dbstate.table.get(this.id);
       if (freshData) {
         Object.assign(this, freshData);
         return this;
@@ -409,7 +440,7 @@ export class SlapBaseEntity {
       return undefined;
     } catch (error) {
       console.log(
-        `Error en reload() de la clase de la entidad ${this.staticSelf.entityName}:`,
+        `Error en reload() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -429,7 +460,7 @@ export class SlapBaseEntity {
       return copy;
     } catch (error) {
       console.log(
-        `Error en clone() de la clase de la entidad ${this.staticSelf.entityName}:`,
+        `Error en clone() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),

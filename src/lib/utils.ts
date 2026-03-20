@@ -14,3 +14,20 @@ export function isSubclass(subClass: any, superClass: any): boolean {
   // eslint-disable-next-line no-prototype-builtins
   return superClass.prototype.isPrototypeOf(subClass.prototype);
 }
+export function mergeObjects<T, U>(obj1: T, obj2: U): T & U {
+  const output: any = { ...obj1 };
+  for (const key in obj2) {
+    if (key in output) {
+      if (Array.isArray(output[key]) && Array.isArray(obj2[key])) {
+        output[key] = [...output[key], ...obj2[key]];
+      } else if (typeof output[key] === 'object' && typeof obj2[key] === 'object') {
+        output[key] = mergeObjects(output[key], obj2[key]);
+      } else {
+        output[key] = obj2[key];
+      }
+    } else {
+      output[key] = obj2[key];
+    }
+  }
+  return output;
+}

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SlapDB } from '.';
-import type { Metaclass } from '../utils';
+import { mergeObjects, type Metaclass } from '../utils';
 import { type SlapBaseEntity } from './SlapBaseEntity';
 
 // 1. Decorador de clase para marcar una clase como entidad de la base de datos
@@ -54,6 +54,30 @@ export function Column(
   return function (target: any, key: string) {
     // Obtenemos o inicializamos la lista de columnas en el prototipo
     const MiClase = target.constructor as SlapBaseEntity;
+    if (!Object.hasOwn(MiClase, '_configuration')) {
+      if (!Object.hasOwn(MiClase, '_myConfiguration')) {
+        Object.defineProperty(MiClase, '_myConfiguration', {
+          value: {},
+          enumerable: true,
+          configurable: false,
+        }); //Crea un campo donde almacenar el objeto de configuración de esta clase
+      }
+      Object.defineProperty(MiClase, '_configuration', {
+        //Define getter y setter para _configuration
+        get() {
+          return mergeObjects(
+            Object.getPrototypeOf(this.prototype)._configuration,
+            this._myConfiguration,
+          );
+        },
+        set(newVal) {
+          this._myConfiguration = newVal;
+        },
+        enumerable: true,
+        configurable: false,
+      });
+    }
+
     if (tipo === 'data') {
       MiClase._columns.push(key);
     } else if (tipo === 'metadata') {
