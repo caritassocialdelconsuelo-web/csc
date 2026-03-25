@@ -1,7 +1,9 @@
 <template>
-  <router-view />
+  <suspense>
+    <router-view />
+    <template #fallback> Cargando..... </template>
+  </suspense>
 </template>
-
 <script setup lang="ts">
 import { useNetworkSync } from './composables/useNetworkSync';
 // IMPORTANTE: No uses 'await' aquí afuera
