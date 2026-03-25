@@ -90,13 +90,30 @@
               padding="sm lg"
             />
           </div>
+          <q-separator class="q-my-lg" />
+
+          <div class="row justify-between items-center">
+            <div class="text-caption text-grey">
+              Estado de cuenta:
+              <q-badge :color="statusColor" label-color="white" :label="formData.estado" />
+            </div>
+
+            <q-btn
+              label="Probar Reactividad"
+              @click="onReactivity"
+              color="primary"
+              :loading="saving"
+              icon="save"
+              padding="sm lg"
+            />
+          </div>
         </q-form>
       </q-card-section>
     </q-card>
   </q-page>
 </template>
-
 <script setup lang="ts">
+import type { Ref } from 'vue';
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useQuasar } from 'quasar';
 
@@ -122,11 +139,11 @@ const TEMA_OPTIONS = [
 
 // ESTADO REACTIVO
 const $q = useQuasar();
-const docPerfil = ref<EPerfil | null>(null);
-const formData = ref<Partial<EPerfil>>({});
+
+let formData: Ref;
 const loadingInitial = ref(true);
 const saving = ref(false);
-
+let perfil: EPerfil;
 // COMPUTED
 const statusColor = computed(() => {
   switch (formData.value.estado) {
@@ -140,24 +157,21 @@ const statusColor = computed(() => {
       return 'warning';
   }
 });
-
+const {
+  data: { user },
+} = await supabase.auth.getUser();
+const db = prepareDb(user?.id || '');
 /**
  * Carga inicial y suscripción reactiva
  */
 onMounted(async () => {
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const db = prepareDb(user?.id || '');
-
     if (!user || !db) {
       $q.notify({ type: 'negative', message: 'No se detectó sesión activa' });
       return;
     }
-
-    docPerfil.value = await EPerfil.get(user.id);
-    formData.value = docPerfil.value?.getObjectData();
+    perfil = await EPerfil.get(user.id);
+    formData = perfil.refAssociatedData;
     loadingInitial.value = false;
   } catch (error) {
     console.error('Error en ProfilePage:', error);
@@ -172,18 +186,27 @@ onUnmounted(() => {});
 /**
  * Persistencia Offline-First
  */
+async function onReactivity() {
+  if (!user || !db) {
+    $q.notify({ type: 'negative', message: 'No se detectó sesión activa' });
+    return;
+  }
+  const perfil1 = await EPerfil.get(user.id);
+
+  perfil1.nombre = 'Peperulo2';
+}
 async function saveProfile() {
-  if (!docPerfil.value) return;
+  if (!perfil) return;
 
   saving.value = true;
   try {
-    docPerfil.value.patch({
+    perfil.patch({
       nombre: formData.value.nombre || '',
       apellido: formData.value.apellido || '',
       idioma: formData.value.idioma || '',
       tema: formData.value.tema || 'system',
     });
-    await docPerfil.value.save();
+    await perfil.save();
     $q.notify({
       type: 'positive',
       message: 'Cambios guardados localmente',
