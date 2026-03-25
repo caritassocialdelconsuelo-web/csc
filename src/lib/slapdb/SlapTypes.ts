@@ -24,7 +24,7 @@ export interface IRealtimeSynchronize {
 export interface IDictionary<T> {
   [key: string]: T;
 }
-export type TColumnType = 'metadata' | 'data' | 'key' | 'system';
+export type TColumnType = 'metadata' | 'data' | 'key' | 'system' | 'computed';
 
 export interface IColumnDescriptor {
   name: string;

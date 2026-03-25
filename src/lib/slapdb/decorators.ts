@@ -55,7 +55,7 @@ export function Entity(entityName: string, syncTableName: string) {
   };
 }
 //Decorador de propiedad para marcar un campo como columna de la base de datos
-export function Column(tipo: TColumnType = 'data', indexed: boolean = false) {
+export function Column(tipo: TColumnType = 'data', indexed: boolean = false, func?: ((newVal: any, oldVal: any, obj: SlapBaseEntity) => Error | boolean) | ((obj: SlapBaseEntity) => any)) {
   return function (target: any, key: string) {
     // Obtenemos o inicializamos la lista de columnas en el prototipo
     const MiClase = target.constructor;
@@ -83,10 +83,29 @@ export function Column(tipo: TColumnType = 'data', indexed: boolean = false) {
     delete target[key];
     Object.defineProperty(target, key, {
       get() {
-        return this.getField(key);
+        if (tipo === 'computed') {
+          if (func) {
+            const res = (func as (obj: SlapBaseEntity) => any)(this);
+            return res;
+          }
+        } else {
+          return this.getField(key);
+        }
       },
       set(newVal: any) {
-        this.setField(key, newVal);
+        let res: any = true;
+        if (func) {
+          res = func(newVal, this[key], this);
+        }
+        if (typeof res == 'boolean') {
+          if (res) {
+            this.setField(key, newVal);
+          } else {
+            throw Error("No se ha podido actualizar porque fallaron las reglas de validación")
+          }
+        } else {
+          throw res;
+        }
       },
       enumerable: true,
       configurable: false,
