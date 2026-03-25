@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { Table } from 'dexie';
+import type { Table, Transaction } from 'dexie';
 import { type SlapBaseEntity } from './SlapBaseEntity';
 
 //export const registeredEntitys: {
@@ -21,25 +21,35 @@ export const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<
 
   //Hook de creación
   classEntity._configuration.dbstate.table.hook(
-    // Registramos el hook "creating"
     'creating',
-    classEntity.hookCreating,
+    (primKey: any, obj: any, transaction: Transaction) => {
+      return classEntity.hookCreating(classEntity, primKey, obj, transaction);
+    },
   );
+  //(classEntity.hookCreating as any).relClass = classEntity;
+
   //Hook de borrado
   classEntity._configuration.dbstate.table.hook(
     // Registramos el hook "deleting"
     'deleting',
-    classEntity.hookDeleting,
+    (primKey: any, obj: any, transaction: Transaction) => {
+      return classEntity.hookDeleting(classEntity, primKey, obj, transaction);
+    },
   );
+  //(classEntity.hookDeleting as any).relClass = classEntity;
 
   //Hook de updating
   classEntity._configuration.dbstate.table.hook(
     // Registramos el hook "updating"
     'updating',
-    classEntity.hookUpdating,
+    (modifications: any, primKey: any, obj: any, transaction: Transaction) => {
+      return classEntity.hookUpdating(classEntity, modifications, primKey, obj, transaction);
+    },
   );
-
+  //(classEntity.hookUpdating as any).relClass = classEntity;
   //Hook de reading
 
-  classEntity._configuration.dbstate.table.hook('reading', classEntity.hookReading);
+  classEntity._configuration.dbstate.table.hook('reading', (obj: any) => {
+    return classEntity.hookReading(classEntity, obj);
+  });
 };

@@ -24,7 +24,7 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
   } = {}; //Diccionario para almacenar las entidades registradas y sus nombres de tabla locales
   private static channel: RealtimeChannel;
   static registerEntity(classEntity: Metaclass<typeof SlapBaseEntity>, localTableName: string) {
-    this.entities[classEntity._composeConfiguration.schemaInfo.entityName] = {
+    this.entities[classEntity._composeConfiguration.schemaInfo.entityName || localTableName] = {
       baseClass: classEntity,
       localTableName,
     };
@@ -125,16 +125,18 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
   }) {
     try {
       const currentVersion = this.verno || 0;
-      if (baseClass._configuration.dbstate.registrable && !baseClass._configuration.dbstate.registered) {
+      if (
+        baseClass._configuration.dbstate.registrable &&
+        !baseClass._configuration.dbstate.registered
+      ) {
         baseClass._configuration.dbstate.registered = true; //Indicamos que esta clase ya se ha registrado en la base de datos
         // Definimos el store
         this.version(currentVersion).stores({
           [localTableName]: baseClass.schema,
         });
-
         // Mapeamos la tabla a la clase
         // Esto hace que db[tableName] devuelva instancias de entityClass
-        this[localTableName].mapToClass(baseClass);
+        //this[localTableName].mapToClass(baseClass);
         registerEntity(baseClass, this[localTableName] as Table<any, any>);
       } else {
         console.log(
@@ -160,10 +162,14 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
   ) {
     if (synClass && isSubclass(synClass, SlapBaseEntityWithReplycation)) {
       const entityKeyColumn =
-        ((synClass._composeConfiguration.schemaInfo.keyColumns?.length ?? 0) > 0 ? synClass._composeConfiguration.schemaInfo.keyColumns?.[0] : 'id') ?? 'id'; //Obtenemos la columna clave de la entidad, por defecto 'id'
+        ((synClass._composeConfiguration.schemaInfo.keyColumns?.length ?? 0) > 0
+          ? synClass._composeConfiguration.schemaInfo.keyColumns?.[0]
+          : 'id') ?? 'id'; //Obtenemos la columna clave de la entidad, por defecto 'id'
 
       const syncTableName = synClass._composeConfiguration.dbstate.syncTableName; //Obtenemos el nombre de la tabla remota desde la clase
-      const localTableName = this.staticSelf.entities[synClass._composeConfiguration.schemaInfo.entityName]?.localTableName ?? ''; //Obtenemos el nombre de la tabla local desde el registro de entidades
+      const localTableName =
+        this.staticSelf.entities[synClass._composeConfiguration.schemaInfo.entityName]
+          ?.localTableName ?? ''; //Obtenemos el nombre de la tabla local desde el registro de entidades
       const syncMeta = await this.table('_sync_meta').get(localTableName);
       const lastCp = syncMeta?.checkpoint || 0;
 
@@ -254,10 +260,16 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
         const errors = await this.syncTable(supabase, synClass as any);
 
         if (errors && errors.length > 0) {
-          console.warn(`⚠️ Conflictos sincronizando en la entidad ${synClass._composeConfiguration.schemaInfo.entityName}:`, errors);
+          console.warn(
+            `⚠️ Conflictos sincronizando en la entidad ${synClass._composeConfiguration.schemaInfo.entityName}:`,
+            errors,
+          );
         }
       } catch (error) {
-        console.error(`❌ Error sincronizando tabla de la entidad ${synClass._composeConfiguration.schemaInfo.entityName}:`, error);
+        console.error(
+          `❌ Error sincronizando tabla de la entidad ${synClass._composeConfiguration.schemaInfo.entityName}:`,
+          error,
+        );
       }
     }
 

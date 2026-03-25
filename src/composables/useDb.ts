@@ -8,7 +8,7 @@ const loading = ref(false);
 const error = ref(null);
 
 export function useDatabase(
-  config: { [key: string]: any },
+  config: { [key: string]: any } = {},
   createFnc?: (config: { [key: string]: any }) => SlapDB | null,
 ) {
   try {

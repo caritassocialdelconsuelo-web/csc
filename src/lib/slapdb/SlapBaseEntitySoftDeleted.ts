@@ -1,9 +1,11 @@
+import { Metaclass } from './../utils';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 //**********************Clase de borrado blando */
 
 import { Transaction } from 'dexie';
 import { Column } from './decorators';
 import { SlapBaseEntity } from './SlapBaseEntity';
+import { TDataSlapEntity } from './SlapTypes';
 
 export class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
   static DEFAULT_ESTADO = 'pending'; //Estado por defecto cuando no tiene estado
@@ -20,9 +22,8 @@ export class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
   @Column('metadata', true)
   deletedAt: number = 0;
 
-  constructor(data?: Partial<SlapBaseEntity>) {
-    super(data);
-    this.initializeMyData(data);
+  constructor(data?: TDataSlapEntity, fromDb: boolean = false) {
+    super(data, fromDb);
     try {
       this.status = this.staticSelf.DEFAULT_ESTADO;
       this.createdAt = this.staticSelf.getAt();
@@ -71,8 +72,13 @@ export class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
   //Modificamos los hook de Create y Update para asentar los estados y timestamps
 
   //Creating
-  static override hookCreating = (primKey: any, obj: any, transaction: Transaction) => {
-    const key = super.hookCreating(primKey, obj, transaction);
+  static override hookCreating = (
+    myClass: Metaclass<typeof SlapBaseEntity>,
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) => {
+    const key = super.hookCreating(myClass, primKey, obj, transaction);
     obj.status = this.CREATED_ESTADO;
     obj.createdAt = this.getAt();
     obj.updatedAt = this.getAt();
@@ -81,6 +87,7 @@ export class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
 
   //Updating
   static override hookUpdating = (
+    myClass: Metaclass<typeof SlapBaseEntity>,
     modifications: any,
     primKey: any,
     obj: any,
@@ -90,7 +97,7 @@ export class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
       modifications.status === this.DELETED_ESTADO ? this.DELETED_ESTADO : this.UPDATED_ESTADO;
     return {
       ...modifications,
-      ...super.hookUpdating(modifications, primKey, obj, transaction),
+      ...super.hookUpdating(myClass, modifications, primKey, obj, transaction),
       status,
       updatedAt: this.getAt(),
     };

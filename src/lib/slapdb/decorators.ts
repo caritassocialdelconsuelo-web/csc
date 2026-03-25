@@ -18,8 +18,13 @@ export function Entity(entityName: string, syncTableName: string) {
         //this.getThisClass().checkRegistered()
         // 3. En este punto, los campos de la Hija ya se inicializaron.
         // Si el primer argumento es el objeto 'data', lo aplicamos ahora.
-        const data = args[0];
-        this.initializeMyData(data);
+        const data = args.length > 0 ? args[0] : undefined;
+        const fromDb = args.length > 1 ? args[1] : false;
+        if (data) {
+          this.initializeMyData(data);
+          this._persisted = fromDb;
+          this._newObject = !fromDb;
+        }
       }
     };
     //4. Definimos el nombre dinámicamente en la propiedad 'name'
@@ -50,10 +55,7 @@ export function Entity(entityName: string, syncTableName: string) {
   };
 }
 //Decorador de propiedad para marcar un campo como columna de la base de datos
-export function Column(
-  tipo: TColumnType = 'data',
-  indexed: boolean = false,
-) {
+export function Column(tipo: TColumnType = 'data', indexed: boolean = false) {
   return function (target: any, key: string) {
     // Obtenemos o inicializamos la lista de columnas en el prototipo
     const MiClase = target.constructor;
@@ -61,8 +63,8 @@ export function Column(
     const field: IColumnDescriptor = {
       name: key,
       indexed: indexed,
-      tipo: tipo
-    }
+      tipo: tipo,
+    };
     if (tipo === 'data') {
       config.schemaInfo.columns[key] = field;
     } else if (tipo === 'metadata') {
@@ -78,5 +80,16 @@ export function Column(
       //Si la columna se marca como indexada y no es de tipo 'key', la agregamos a la lista de columnas indexadas
       config.schemaInfo.indexedColumns[key] = key;
     }
+    delete target[key];
+    Object.defineProperty(target, key, {
+      get() {
+        return this.getField(key);
+      },
+      set(newVal: any) {
+        this.setField(key, newVal);
+      },
+      enumerable: true,
+      configurable: false,
+    });
   };
 }

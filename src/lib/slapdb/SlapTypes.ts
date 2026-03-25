@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { type SupabaseClient } from '@supabase/supabase-js';
 import type { Table } from 'dexie';
+import type { Ref } from 'vue';
+import type { Destructibles } from './SlapDestructibles';
 
 export interface ICustomScriptCode {
   get sqlCode(): string;
@@ -27,7 +29,7 @@ export type TColumnType = 'metadata' | 'data' | 'key' | 'system';
 export interface IColumnDescriptor {
   name: string;
   indexed: boolean;
-  tipo: TColumnType
+  tipo: TColumnType;
 }
 export interface IConfigSlapEntity {
   schemaInfo: {
@@ -37,7 +39,7 @@ export interface IConfigSlapEntity {
     systemColumns: IDictionary<IColumnDescriptor>;
     indexedColumns: IDictionary<string>; //Lista de columnas que se deben indexar en la base de datos, se setea con el decorador @Column({indexed:true})
     indexCompositeKeys: IDictionary<string[]>; //Objeto que define las claves compuestas para índices, la clave es el nombre del índice y el valor es un array de columnas que forman la clave compuesta, se setea con el decorador @Column({indexComposite:'indexName'})
-    entityName: string; //Nombre de la entidad, se setea con el decorador @Entity
+    entityName?: string; //Nombre de la entidad, se setea con el decorador @Entity
   };
   dbstate: {
     table: Table<any, any>;
@@ -46,7 +48,15 @@ export interface IConfigSlapEntity {
     syncTableName?: string; //Nombre de la tabla en la base de datos, se setea con el decorador @Entity, si no se setea se usa el nombre de la clase
   };
 }
-
-export interface IDataSlapEntity {
-  keys: WeakMap<symbol, IDictionary<any>>;
+export type TDataSlapEntity = Ref<IDictionary<any>>;
+/*export type TDatasSlapEntity = {
+  weakMap: WeakMap<symbol, TDataSlapEntity>;
+  keys: Map<string, symbol>;
+};*/
+export interface IcurrentDbData {
+  persisted: boolean;
+}
+export interface IDestructibleAssociated {
+  referrers: WeakRef<Destructibles>[];
+  associatedData: Ref<any>;
 }

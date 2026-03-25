@@ -3,37 +3,42 @@
 import { liveQuery, Transaction, Observable } from 'dexie';
 import { BehaviorSubject, debounceTime, distinctUntilChanged, switchMap, from } from 'rxjs';
 import { Column } from './decorators';
-import { IConfigSlapEntity, IDataSlapEntity } from './SlapTypes';
-import { mergeObjects } from '../utils';
+import { IConfigSlapEntity, IcurrentDbData, IDictionary, TDataSlapEntity } from './SlapTypes';
+import { mergeObjects, Metaclass } from '../utils';
+import { Destructibles } from './SlapDestructibles';
+import { useDatabase } from 'src/composables/useDb';
+import { useSupabase } from 'src/composables/useSupabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { SlapBaseEntityWithReplycation } from './SlapBaseEntityWithReplycation';
 
 //Clase base para todas las entidades con ID generado por UUID
-export class SlapBaseEntity {
-  static _data: IDataSlapEntity;
+export class SlapBaseEntity extends Destructibles {
   static _myConfiguration: IConfigSlapEntity;
-  protected static checkMyConfiguration() {
-    if (!Object.hasOwn(this, '_myConfiguration')) {
-      Object.defineProperty(this, '_myConfiguration', {
-        value: {
-          schemaInfo:
-          {
-            entityName: this.name,
-            columns: {},
-            metadataColumns: {},
-            keyColumns: {},
-            systemColumns: {},
-            indexedColumns: {},
-            indexCompositeKeys: {},
 
-          },
-          dbstate: {
-          }
-        },
+  static [key: string]: any;
+
+  protected static checkMyConfiguration() {
+    return this.checkOwnPropertyClass('_myConfiguration', {
+      schemaInfo: {
+        columns: {},
+        metadataColumns: {},
+        keyColumns: {},
+        systemColumns: {},
+        indexedColumns: {},
+        indexCompositeKeys: {},
+      },
+      dbstate: {},
+    });
+  }
+  private static checkOwnPropertyClass(key: string, initiaValue: any) {
+    if (!Object.hasOwn(this, key)) {
+      Object.defineProperty(this, key, {
+        value: initiaValue,
         enumerable: true,
-        writable: true
-      }
-      );
+        writable: true,
+      });
     }
-    return this._myConfiguration;
+    return this[key];
   }
   public static get _configuration(): IConfigSlapEntity {
     return this.checkMyConfiguration();
@@ -43,13 +48,39 @@ export class SlapBaseEntity {
       this._myConfiguration = newVal;
     }
   }
+
   public static get _composeConfiguration(): IConfigSlapEntity {
-    return mergeObjects(Object.getPrototypeOf(this)?._composeConfiguration || {}, this._configuration)
+    return mergeObjects(
+      Object.getPrototypeOf(this)?._composeConfiguration || {},
+      this._configuration,
+    );
   }
 
   static get schema() {
     return Object.keys(this._composeConfiguration.schemaInfo.indexedColumns).join(',') || 'id';
   } //Definimos el schema base con ID y las columnas indexadas, las columnas indexadas se definen con el decorador @Column({indexed:true})
+  _persisted: boolean = false;
+  _newObject: boolean = true;
+
+  public static getUniqueKey(obj: any) {
+    const key = Object.keys(this._composeConfiguration.schemaInfo.keyColumns)
+      .map((key) => obj[key])
+      .join('_');
+    return key;
+  }
+
+  public getField(key: string) {
+    const data = this.refAssociatedData;
+    if (data?.value) {
+      if (key in data.value) {
+        return data.value[key];
+      }
+    }
+  }
+  public setField(key: string, newVal: any) {
+    this.associatedData = { ...this.associatedData, ...{ [key]: newVal } };
+    this._persisted = false; //Siempre decimos que este cambio no fue persistido.
+  }
 
   [key: string]: any; //Define un diccionario dinámico para la clase
 
@@ -57,40 +88,11 @@ export class SlapBaseEntity {
   id: string | null = null;
 
   //Constructor genérico
-  constructor(data?: Partial<SlapBaseEntity>) {
-    try {
-      //      this.getThisClass().checkRegistered();
-      this.initializeMyData(data);
-    } catch (error) {
-      console.log(
-        `Error en constructor() de la clase de la entidad ${this.getThisClass().entityName}:`,
-        error,
-        'data==>',
-        JSON.stringify(this),
-      );
-    }
+  constructor(data?: TDataSlapEntity, fromDb: boolean = false) {
+    const key = fromDb && data ? new.target.getUniqueKey(data) : null;
+    super(key);
   }
-  //Funcion estatica que se autoregistra cuando se crea el primer objeto
-  //static checkRegistered() {
-  //  if (!this.registered && this.registrable) {
-  //    const db = useDatabase({}).db.value;
-  //    if (db) {
-  //      db.registerOneEntity({
-  //        baseClass: this as unknown as typeof SlapBaseEntity,
-  //        syncTableName: (this as any).syncTableName || ''});
-  //    }
-  //  }
-  //}
 
-  initializeMyData(data: any) {
-    if (data && typeof data === 'object') {
-      //Solo copia datamembers que tenga yo
-      Object.assign(
-        this,
-        Object.fromEntries(Object.entries(data).filter(([key]) => Object.hasOwn(this, key))),
-      );
-    }
-  }
   //Metodos estaticos de la clase base para todas las entidades (colecciones)
   // --- MÉTODOS ESTÁTICOS (Proxy de Table) ---
   static getLiveQuery$<T extends SlapBaseEntity>(querier: () => any): Observable<T[]> {
@@ -146,7 +148,15 @@ export class SlapBaseEntity {
       };
     }
   }
-
+  static instanceClass(obj: any) {
+    if (obj.class) {
+      const myClass: Metaclass<typeof SlapBaseEntity> = obj.class;
+      delete obj.class;
+      return new myClass(obj, true);
+    } else {
+      return obj;
+    }
+  }
   // Lectura
   static async get(id: any) {
     try {
@@ -261,7 +271,16 @@ export class SlapBaseEntity {
       );
     }
   }
-
+  static checkInMemory(key: string, obj: any) {
+    const refData = this.getRefAssociatedData(key);
+    if (refData) {
+      if (!refData.value) {
+        refData.value = { ...obj };
+      } else {
+        refData.value = mergeObjects(refData.value, obj);
+      }
+    }
+  }
   // Método estático universal para contar registros
   static async contar(): Promise<number | undefined> {
     try {
@@ -278,12 +297,23 @@ export class SlapBaseEntity {
     return Date.now();
   }
   //Metodos Staticos para Hooks
-  static hookCreating = (primKey: any, obj: any, transaction: Transaction) => {
+  static hookCreating(
+    myClass: Metaclass<typeof SlapBaseEntity>,
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) {
     try {
       if (!obj.id) {
         //Si no tiene ID, le asignamos uno nuevo
         obj.id = crypto.randomUUID(); //Genera una clave única
       }
+      if ('objectCreator' in obj) {
+        const objectCreator: SlapBaseEntity = obj.objectCreator;
+        delete obj.objectCreator;
+        objectCreator.refDbData = obj;
+      }
+      myClass.checkInMemory(obj.id, obj);
       return obj.id; //Devuelve la PK para que Dexie la use
     } catch (error) {
       console.log(
@@ -291,9 +321,14 @@ export class SlapBaseEntity {
         error,
       );
     }
-  };
+  }
 
-  static hookDeleting = (primKey: any, obj: any, transaction: Transaction) => {
+  static hookDeleting(
+    myClass: Metaclass<typeof SlapBaseEntity>,
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) {
     try {
       //      hookContext.onsuccess = () => console.log('Borrado Succes con PK:', primKey);
       //      hookContext.onerror = (error) =>
@@ -304,10 +339,17 @@ export class SlapBaseEntity {
         error,
       );
     }
-  };
+  }
 
-  static hookUpdating = (modifications: any, primKey: any, obj: any, transaction: Transaction) => {
+  static hookUpdating(
+    myClass: Metaclass<typeof SlapBaseEntity>,
+    modifications: any,
+    primKey: any,
+    obj: any,
+    transaction: Transaction,
+  ) {
     try {
+      myClass.checkInMemory(primKey, modifications);
       return modifications; //Devuelve las modificaciones para que Dexie las aplique
     } catch (error) {
       console.log(
@@ -315,59 +357,83 @@ export class SlapBaseEntity {
         error,
       );
     }
-  };
+  }
 
-  static hookReading = (obj: any) => {
+  static hookReading(myClass: Metaclass<typeof SlapBaseEntity>, obj: any) {
     try {
-      return obj;
+      if (myClass) {
+        const obj1 = new myClass(obj, true);
+        return obj1;
+      } else {
+        return obj;
+      }
     } catch (error) {
       console.log(
         `Error en hookReading() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
         error,
       );
     }
-  };
+  }
 
   //Metodos de instancia
   //Esto permite llamar members de clase desde una instancia
-  protected get staticSelf() {
+  protected override get staticSelf() {
     return this.constructor as typeof SlapBaseEntity;
   }
   static getStaticObjectData<T extends SlapBaseEntity>(
-    item: Partial<T>,
+    item: T,
     forSynchronization: boolean = false,
   ) {
-    const copiaData: any = {};
-    const copiaMetaData: any = {};
-    const copiaKeys: any = {};
-    const copiaSystem: any = {};
+    if (forSynchronization) {
+      //Genera objeto para syncronizacion con supabase
+      const copiaData: any = {};
+      const copiaMetaData: any = {};
+      const copiaKeys: any = {};
+      const copiaSystem: any = {};
+      const composeConfig = this._composeConfiguration;
 
-    for (const col in this._composeConfiguration.schemaInfo.columns) {
-      if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
-        copiaData[col] = item[col];
+      for (const col in composeConfig.schemaInfo.columns) {
+        if (col in item) {
+          const data = item[col];
+          if (typeof data !== 'function') copiaData[col] = data;
+        }
       }
-    }
-    for (const col in this._configuration.schemaInfo.metadataColumns) {
-      if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
-        copiaMetaData[`${forSynchronization ? '_' : ''}${col}`] = item[col];
+      for (const col in composeConfig.schemaInfo.metadataColumns) {
+        if (col in item) {
+          const data = item[col];
+          if (typeof data !== 'function') copiaMetaData[`_${col}`] = data;
+        }
       }
-    }
-    for (const col in this._configuration.schemaInfo.keyColumns) {
-      if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
-        copiaKeys[`${forSynchronization ? (col === 'id' ? '' : '_pk_') : ''}${col}`] = item[col];
+      for (const col in composeConfig.schemaInfo.keyColumns) {
+        if (col in item) {
+          const data = item[col];
+          if (typeof data !== 'function') copiaKeys[`${col === 'id' ? '' : '_pk_'}${col}`] = data;
+        }
       }
-    }
-    for (const col in this._configuration.schemaInfo.systemColumns) {
-      if (Object.prototype.hasOwnProperty.call(item, col) && typeof item[col] !== 'function') {
-        copiaSystem[`${forSynchronization ? '_' : ''}${col}`] = item[col];
+      for (const col in composeConfig.schemaInfo.systemColumns) {
+        if (col in item) {
+          const data = item[col];
+          if (typeof data !== 'function') copiaSystem[`_${col}`] = data;
+        }
       }
+      return {
+        ...copiaKeys,
+        //...(forSynchronization ? copiaSystem : {}),
+        ...copiaSystem,
+        ...copiaData,
+        ...copiaMetaData,
+      };
+    } else {
+      if (item) {
+        const referrer = item.refAssociatedData;
+        if (referrer) {
+          return !item._newObject
+            ? { ...referrer.value, ...{ objectCreator: item } }
+            : referrer.value;
+        }
+      }
+      return undefined;
     }
-    return {
-      ...copiaKeys,
-      ...(forSynchronization ? copiaSystem : {}),
-      ...copiaData,
-      ...copiaMetaData,
-    };
   }
 
   // --- MÉTODOS DE INSTANCIA (Dentro de SlapBaseEntity) ---
@@ -389,16 +455,24 @@ export class SlapBaseEntity {
     try {
       const table = this.staticSelf._configuration.dbstate.table;
       if (!this.id) {
-        if ('gengenerateId' in this && typeof this.generateId === 'function') {
+        if ('generateId' in this && typeof this.generateId === 'function') {
           this.id = await this.generateId();
         } //Si no implementa custom generator ID, se le asignará un UUID en el hook de creación de la base de datos
       }
+      const objData = this.getObjectData();
       // Guardamos y recuperamos la PK resultante
       const pk = await table.put(this.getObjectData());
       // Si la base de datos generó o cambió el ID, lo actualizamos en la instancia
       if (!this.id && typeof pk === 'string') {
         this.id = pk;
+        this.internalKey = pk;
       }
+      this._persisted = true;
+      await useDatabase()?.db.value?.syncTable(
+        useSupabase().supabase.value as unknown as SupabaseClient,
+        this.staticSelf as unknown as SlapBaseEntityWithReplycation,
+      );
+      this._newObject = false;
       return pk;
     } catch (error) {
       console.log(

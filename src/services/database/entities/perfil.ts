@@ -3,7 +3,11 @@
 import { useSession } from 'src/composables/useSession';
 import { Column, Entity } from 'src/lib/slapdb/decorators';
 import { SlapBaseEntityWithReplycation } from 'src/lib/slapdb/SlapBaseEntityWithReplycation';
-import { ICustomGeneratorID, ICustomScriptCode } from 'src/lib/slapdb/SlapTypes';
+import {
+  ICustomGeneratorID,
+  ICustomScriptCode,
+  type TDataSlapEntity,
+} from 'src/lib/slapdb/SlapTypes';
 
 export type EstadoPerfil = 'activo' | 'inactivo' | 'suspendido';
 export type TemaApp = 'light' | 'dark' | 'system';
@@ -178,7 +182,7 @@ export class EPerfil
     return 'Función SQL para generar el ID de EPerfil basado en el user_id de la sesión actual';
   }
 
-  constructor(data: Partial<EPerfil>) {
-    super(data);
+  constructor(data: TDataSlapEntity, fromDb: boolean) {
+    super(data, fromDb);
   }
 }
