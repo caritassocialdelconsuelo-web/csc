@@ -3,6 +3,7 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import type { Table } from 'dexie';
 import type { Ref } from 'vue';
 import type { Destructibles } from './SlapDestructibles';
+import type { SlapBaseEntity } from './SlapBaseEntity';
 
 export interface ICustomScriptCode {
   get sqlCode(): string;
@@ -24,12 +25,17 @@ export interface IRealtimeSynchronize {
 export interface IDictionary<T> {
   [key: string]: T;
 }
-export type TColumnType = 'metadata' | 'data' | 'key' | 'system' | 'computed';
+export type TColumnType = 'metadata' | 'data' | 'key' | 'system' | 'computed' | 'reference' | 'referred';
 
 export interface IColumnDescriptor {
   name: string;
   indexed: boolean;
   tipo: TColumnType;
+  funcToMainClass?: () => typeof SlapBaseEntity;
+  funcToChildClass?: () => typeof SlapBaseEntity;
+  funcFieldReference?: (children: SlapBaseEntity) => any;
+  referenceFieldName?: string;
+  funcFieldReferred?: (main: SlapBaseEntity) => any;
 }
 export interface IConfigSlapEntity {
   schemaInfo: {
@@ -37,6 +43,8 @@ export interface IConfigSlapEntity {
     metadataColumns: IDictionary<IColumnDescriptor>;
     keyColumns: IDictionary<IColumnDescriptor>;
     systemColumns: IDictionary<IColumnDescriptor>;
+    referredColumns: IDictionary<IColumnDescriptor>;
+    referenceColumns: IDictionary<IColumnDescriptor>;
     indexedColumns: IDictionary<string>; //Lista de columnas que se deben indexar en la base de datos, se setea con el decorador @Column({indexed:true})
     indexCompositeKeys: IDictionary<string[]>; //Objeto que define las claves compuestas para índices, la clave es el nombre del índice y el valor es un array de columnas que forman la clave compuesta, se setea con el decorador @Column({indexComposite:'indexName'})
     entityName?: string; //Nombre de la entidad, se setea con el decorador @Entity

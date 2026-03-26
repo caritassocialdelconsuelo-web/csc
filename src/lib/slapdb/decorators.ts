@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SlapDB } from '.';
 import { type Metaclass } from '../utils';
+import { References } from './fk';
 import { type SlapBaseEntity } from './SlapBaseEntity';
 import type { IConfigSlapEntity, TColumnType, IColumnDescriptor } from './SlapTypes';
 
@@ -111,4 +112,57 @@ export function Column(tipo: TColumnType = 'data', indexed: boolean = false, fun
       configurable: false,
     });
   };
+}
+
+export function OneToMany(funcToChildClass: () => typeof SlapBaseEntity, funcFieldReference: (children: SlapBaseEntity) => any, referenceFieldName: string) {
+  return function (target: any, key: string) {
+    const MiClase = target.constructor;
+    const config = MiClase._configuration as IConfigSlapEntity;
+    const field: IColumnDescriptor = {
+      name: key,
+      indexed: false,
+      tipo: 'reference',
+      funcToChildClass,
+      funcFieldReference,
+      referenceFieldName
+    };
+    config.schemaInfo.referenceColumns[key] = field;
+    delete target[key];
+    const referencesArray = new References(field, target)
+    Object.defineProperty(target, key, {
+      get() {
+        return referencesArray;
+      },//Los campos de referencia hijas son computados.
+      enumerable: true,
+      configurable: false,
+    });
+  }
+}
+
+export function ManyToOne(funcToMainClass: () => typeof SlapBaseEntity, funcFieldReferred: (main: SlapBaseEntity) => any) {
+  return function (target: any, key: string) {
+    const MiClase = target.constructor;
+    const config = MiClase._configuration as IConfigSlapEntity;
+    const field: IColumnDescriptor = {
+      name: key,
+      indexed: false,
+      tipo: 'referred',
+      funcToMainClass,
+      funcFieldReferred
+    };
+    config.schemaInfo.referredColumns[key] = field;
+    delete target[key];
+    const referred = new Referred<SlapBaseEntity>(field)
+    Object.defineProperty(target, key, {
+      get() {
+        return referred;
+      },
+      set(newValue: any) {
+        referred.setValue(newValue);
+      },
+      //Los campos de referencia hijas son computados.
+      enumerable: true,
+      configurable: false,
+    });
+  }
 }
