@@ -71,6 +71,13 @@
               class="col-12 col-sm-6"
               options-dense
             />
+            <q-input
+              v-model="$configuration.value.appName"
+              :label="$configuration.value.supabase.session?.user.email"
+              outlined
+              class="col-12 col-sm-6"
+              :rules="[(val) => !!val || 'El apellido es requerido']"
+            />
           </div>
 
           <q-separator class="q-my-lg" />
