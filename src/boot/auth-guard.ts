@@ -1,19 +1,22 @@
+import { useMyConfiguration } from './../composables/useGlobalConfiguration';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { boot } from 'quasar/wrappers';
 import { prepareDb } from 'src/composables/useDb';
 import { registerAutomaticConnect } from 'src/composables/useSession';
 //import { startAllReplications } from 'src/services/database/replication';
 import { useSupabase } from 'src/composables/useSupabase';
-import { EPerfil } from 'src/services/database/entities/perfil';
 // En tu archivo principal o donde se defina las clases ppales
 const modules = import.meta.glob(['/src/lib/sladb/*.ts', '/src/services/database/entities/*.ts'], {
   eager: true,
 });
 
-export default boot(({ router }) => {
-  const {
-    supabase: { value: supabase },
-  } = useSupabase();
+export default boot(({ app, router }) => {
+  const { configuration: myConfiguration, setAppName } = useMyConfiguration();
+  setAppName('Caritas Social', '1.0.1');
+  app.config.globalProperties.$configuration = myConfiguration; //Registra myConfiguration para ser usado globalmente en todos los vue, esto permite accesar desde cualquier componente con $configuration.y sus properties
+  app.provide('myConfiguration', myConfiguration);
+  //Si quiero usarlo en el <Setup> debo usar const myApp = inject('myConfiguration')
+
   router.beforeEach(async (to) => {
     // 1. RESCATE MANUAL DEL TOKEN
     // Buscamos el token en cualquier parte del hash o de la ruta
@@ -34,7 +37,7 @@ export default boot(({ router }) => {
       if (accessToken && refreshToken) {
         // 2. INYECCIÓN FORZADA EN SUPABASE
         // Esto le dice a Supabase: "Aquí tienes los tokens, crea la sesión ya"
-        const { data, error } = await supabase.auth.setSession({
+        const { data, error } = await myConfiguration.value.supabase.client.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         });
@@ -73,7 +76,7 @@ export default boot(({ router }) => {
     // Lógica normal para el resto de las rutas
     const {
       data: { session },
-    } = await supabase.auth.getSession();
+    } = await myConfiguration.value.supabase.client.auth.getSession();
     if (to.meta.requiresAuth && !session) {
       return '/auth/login';
     }
@@ -83,7 +86,7 @@ export default boot(({ router }) => {
   /**
    * 3. ESCUCHA DE EVENTOS (Maneja SIGNED_IN / SIGNED_OUT en tiempo real)
    */
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  myConfiguration.value.supabase.client.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
       await registerAutomaticConnect(session);
       const db = prepareDb(session.user.id);

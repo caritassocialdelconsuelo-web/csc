@@ -2,7 +2,7 @@
 import { createSlapDBCallBack, type SlapDB } from 'src/lib/slapdb';
 import { ref } from 'vue';
 import { getCurrentUser } from './useSupabase';
-type DATABASE_CLASS = /*Definir la clase usada por la base de datos*/ SlapDB;
+export type DATABASE_CLASS = /*Definir la clase usada por la base de datos*/ SlapDB;
 const db = ref<DATABASE_CLASS>();
 const loading = ref(false);
 const error = ref(null);

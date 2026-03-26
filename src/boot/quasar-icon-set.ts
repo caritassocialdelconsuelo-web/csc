@@ -1,9 +1,10 @@
 import { defineBoot } from '#q-app/wrappers';
 import { IconSet } from 'quasar';
+import { iconSetList } from 'src/lib/iconos/iconSetList';
 
 // relative path to your node_modules/quasar/..
 // change to YOUR path
-const iconSetList = import.meta.glob('../../node_modules/quasar/icon-set/*.js');
+
 // or just a select few (example below with only mdi-v7 and fontawesome-v6):
 // import.meta.glob('../../node_modules/quasar/icon-set/(mdi-v7|fontawesome-v6).js')
 

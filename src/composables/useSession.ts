@@ -22,6 +22,7 @@ export async function useSession() {
   }
   return { session };
 }
+
 export const registerAutomaticConnect = async (newSession: Session | null) => {
   if (!session.value && newSession) {
     session.value = newSession;
