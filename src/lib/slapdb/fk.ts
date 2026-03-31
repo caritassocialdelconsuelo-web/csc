@@ -15,7 +15,7 @@ export class References<T extends SlapBaseEntity> extends Array<T> {
     if (
       this._field.funcToChildClass &&
       this._field.funcFieldReference &&
-      this._field.referenceFieldName &&
+      this._field.options?.referenceFieldName &&
       this._thisMain
     ) {
       const myClass = this._field.funcToChildClass();
@@ -27,8 +27,8 @@ export class References<T extends SlapBaseEntity> extends Array<T> {
         ) =>
           myClass.table
             .where(
-              this._field.referenceFieldName ||
-                `id${(this._thisMain.constructor as unknown as typeof SlapBaseEntity)._composeConfiguration.schemaInfo.entityName}`,
+              this._field.options?.referenceFieldName ||
+              `id${(this._thisMain.constructor as unknown as typeof SlapBaseEntity)._composeConfiguration.schemaInfo.entityName}`,
             )
             .equals(params.id || '')
             .toArray(),
@@ -71,7 +71,7 @@ export class References<T extends SlapBaseEntity> extends Array<T> {
               return false;
             } else {
               const refFieldName =
-                target._field.referenceFieldName ||
+                target._field.options?.referenceFieldName ||
                 `id${(target._thisMain.constructor as unknown as typeof SlapBaseEntity)._configuration.schemaInfo.entityName}`;
               if (refFieldName in value) {
                 value[refFieldName] = target._thisMain['id'];
