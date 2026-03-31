@@ -11,6 +11,6 @@ export class EGrupo extends SlapBaseEntityWithReplycation {
       : new Error('El valor del nombre del grupo no puede quedar vacio');
   })
   nombre!: string;
-  @OneToMany(() => EUsuarioGrupo, (usuarios) => usuarios.grupo, 'grupo')
+  @OneToMany(() => EUsuarioGrupo, (usuarios) => usuarios.grupo, { referenceFieldName: 'grupo' })
   usuarios!: References<EUsuarioGrupo>;
 }
