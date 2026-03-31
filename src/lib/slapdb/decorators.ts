@@ -5,7 +5,7 @@ import { SlapDB } from '.';
 import { type Metaclass } from '../utils';
 import { References } from './fk';
 import { type SlapBaseEntity } from './SlapBaseEntity';
-import type { IConfigSlapEntity, TColumnType, IColumnDescriptor } from './SlapTypes';
+import type { IConfigSlapEntity, TColumnType, IColumnDescriptor, IFieldRefOptions } from './SlapTypes';
 
 // 1. Decorador de clase para marcar una clase como entidad de la base de datos
 export function Entity(entityName: string, syncTableName: string) {
@@ -124,8 +124,7 @@ export function Column(
 
 export function OneToMany(
   funcToChildClass: () => typeof SlapBaseEntity,
-  funcFieldReference: (children: SlapBaseEntity) => any,
-  referenceFieldName: string,
+  funcFieldReference: (children: SlapBaseEntity) => any, options: IFieldRefOptions = { referenceFieldName: null, cascadeDelete: false },
 ) {
   return function (target: any, key: string) {
     const MiClase = target.constructor;
@@ -136,7 +135,7 @@ export function OneToMany(
       tipo: 'reference',
       funcToChildClass,
       funcFieldReference,
-      referenceFieldName,
+      options,
     };
     config.schemaInfo.referenceColumns[key] = field;
     delete target[key];
