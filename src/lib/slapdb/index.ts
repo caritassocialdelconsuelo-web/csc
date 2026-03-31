@@ -12,8 +12,8 @@ import {
   type SupabaseClient,
 } from '@supabase/supabase-js';
 import { type IRealtimeSynchronize } from './SlapTypes';
-import { myConfiguration } from 'src/composables/useGlobalConfiguration';
-import { forceSession, useSession } from 'src/composables/useSession';
+//import { myConfiguration } from 'src/composables/useGlobalConfiguration';
+//import { forceSession, useSession } from 'src/composables/useSession';
 
 //**********************Clase de base de datos generica
 export class SlapDB extends Dexie implements IRealtimeSynchronize {
@@ -373,27 +373,28 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
     console.warn('⚠️ Sin conexión a internet. Trabajando en modo local.');
   }
   async test() {
-    await forceSession();
-    const userId = useSession().session.value?.user.id;
-    if (this.staticSelf.entities.Grupo && this.staticSelf.entities.UsuarioGrupo) {
-      const grupo = new this.staticSelf.entities.Grupo.baseClass();
-      grupo.nombre = 'Grupo 2';
-      const usuario = grupo.usuarios.create();
-      usuario.perfil = userId;
-      //   // usuario.perfil = myConfiguration.configuration.value.supabase.session?.user.id;
-      await grupo.save();
-      //  grupo.nombre = 'Grupo 1';
-      //  await grupo.save();
-      const usuarioGrupo = new this.staticSelf.entities.UsuarioGrupo.baseClass();
-      usuarioGrupo.grupo = grupo;
-      usuarioGrupo.perfil = userId;
-      await usuarioGrupo.save();
-      console.log('Grupo:', (await usuarioGrupo.grupo).value);
-      console.log('Perfil:', (await usuarioGrupo.perfil).value);
-      console.log('Los usuarios ahora son:', grupo.usuarios);
-    }
-    //console.log('Pasando por el testo de SlapDb');
-    //console.log(await this.table('Perfil').get('f08c6f80-f87d-41b6-b62e-1d4ada9699bb'));
+    /*  await forceSession();
+      const userId = useSession().session.value?.user.id;
+      if (this.staticSelf.entities.Grupo && this.staticSelf.entities.UsuarioGrupo) {
+        const grupo:EGrupo = (new this.staticSelf.entities.Grupo.baseClass()) as unknown as EGrupo;
+        grupo.nombre = 'Grupo 2';
+        (await grupo.usuarios[0]?.perfil).value.
+        const usuario = grupo.usuarios.create();
+        usuario.perfil = userId;
+        //   // usuario.perfil = myConfiguration.configuration.value.supabase.session?.user.id;
+        await grupo.save();
+        //  grupo.nombre = 'Grupo 1';
+        //  await grupo.save();
+        const usuarioGrupo = new this.staticSelf.entities.UsuarioGrupo.baseClass();
+        usuarioGrupo.grupo = grupo;
+        usuarioGrupo.perfil = userId;
+        await usuarioGrupo.save();
+        console.log('Grupo:', (await usuarioGrupo.grupo).value);
+        console.log('Perfil:', (await usuarioGrupo.perfil).value);
+        console.log('Los usuarios ahora son:', grupo.usuarios);
+      }
+      //console.log('Pasando por el testo de SlapDb');
+      //console.log(await this.table('Perfil').get('f08c6f80-f87d-41b6-b62e-1d4ada9699bb'));*/
   }
 }
 
