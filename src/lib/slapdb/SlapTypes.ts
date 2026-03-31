@@ -34,6 +34,11 @@ export type TColumnType =
   | 'reference'
   | 'referred';
 
+export interface IFieldRefOptions {
+  referenceFieldName: string | null;
+  cascadeDelete?: boolean;
+}
+
 export interface IColumnDescriptor {
   name: string;
   indexed: boolean;
@@ -41,7 +46,7 @@ export interface IColumnDescriptor {
   funcToMainClass?: () => typeof SlapBaseEntity;
   funcToChildClass?: () => typeof SlapBaseEntity;
   funcFieldReference?: (children: SlapBaseEntity) => any;
-  referenceFieldName?: string;
+  options?: IFieldRefOptions;
   funcFieldReferred?: (main: SlapBaseEntity) => any;
 }
 export interface IConfigSlapEntity {
