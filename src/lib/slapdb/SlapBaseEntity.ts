@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { liveQuery, Transaction, Observable, IndexableType } from 'dexie';
+import { liveQuery, Transaction, Observable, IndexableType, Table } from 'dexie';
 import { BehaviorSubject, debounceTime, distinctUntilChanged, switchMap, from } from 'rxjs';
 import { Column } from './decorators';
-import { IConfigSlapEntity, TDataSlapEntity } from './SlapTypes';
+import { IColumnDescriptor, IConfigSlapEntity, TDataSlapEntity } from './SlapTypes';
 import { mergeObjects, Metaclass } from '../utils';
 import { Destructibles } from './SlapDestructibles';
 import { SlapBaseEntityWithReplycation } from './SlapBaseEntityWithReplycation';
@@ -149,15 +149,7 @@ export class SlapBaseEntity extends Destructibles {
       };
     }
   }
-  static instanceClass(obj: any) {
-    if (obj.class) {
-      const myClass: Metaclass<typeof SlapBaseEntity> = obj.class;
-      delete obj.class;
-      return new myClass(obj, true);
-    } else {
-      return obj;
-    }
-  }
+
   // Lectura
   static get table() {
     const conf = this._composeConfiguration;
@@ -492,9 +484,9 @@ export class SlapBaseEntity extends Destructibles {
         for (const col in this.staticSelf._composeConfiguration.schemaInfo.referenceColumns) {
           const field = this.staticSelf._composeConfiguration.schemaInfo.referenceColumns[col];
           for (const reference of this[col]) {
-            if (field?.referenceFieldName) {
-              if (reference.getField(field.referenceFieldName) !== pk) {
-                reference[field.referenceFieldName] = pk;
+            if (field?.options?.referenceFieldName) {
+              if (reference.getField(field.options.referenceFieldName) !== pk) {
+                reference[field.options.referenceFieldName] = pk;
               }
             }
           }
@@ -540,7 +532,26 @@ export class SlapBaseEntity extends Destructibles {
       if (!this.id) {
         throw new Error('No se puede eliminar una instancia que no tiene ID (no existe en DB).');
       }
-      await this.staticSelf.table.delete(this.id);
+      const table = this.staticSelf.table;
+      const refColumns = this.staticSelf._composeConfiguration.schemaInfo.referenceColumns;
+      const tablesTrans: Table[] = [table]; //Tabla principal que se va a borrar, siempre debe estar incluida en la transacción.
+      const cascadeDeletes: { references: SlapBaseEntity[] }[] = [];
+      for (const col in refColumns) {
+        if (refColumns[col]?.options?.cascadeDelete && refColumns[col]?.funcToChildClass) {
+          tablesTrans.push(refColumns[col].funcToChildClass().table);
+          cascadeDeletes.push({
+            references: this[col],
+          });
+        }
+      }//Genera un array de las tablas que intervienen en la transacción de borrado.
+      await table.db.transaction('rw', tablesTrans, async () => {
+        for (const deletes of cascadeDeletes) { //Campos que son tablas relacionadas con esta entidad y que tienen cascadeDelete en true, se borran automáticamente al borrar esta entidad, para evitar datos huérfanos.
+          for (const reference of deletes.references) {//Cada fila dentro de la tabla relacionada que tiene cascadeDelete en true, se borra automáticamente al borrar esta entidad, para evitar datos huérfanos.
+            await reference.delete(); //Borra cada referencia relacionada con esta entidad, si es que existen, antes de borrar esta entidad.
+          }
+        }
+        await table.delete(this.id!); //Borra esta entidad. El orden es importante, primero se borran las referencias relacionadas y luego esta entidad, para evitar errores de claves foráneas.
+      });
     } catch (error) {
       console.log(
         `Error en delete() de la clase de la entidad ${this.staticSelf._composeConfiguration.schemaInfo.entityName}:`,
