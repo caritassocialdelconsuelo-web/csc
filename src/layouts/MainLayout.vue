@@ -21,7 +21,7 @@
 
         <q-toolbar-title>Caritas Social (ntra. señora del Consuelo) App </q-toolbar-title>
 
-        <div>{{ $configuration.value.appName }} v{{ $configuration.value.version }}</div>
+        <div>{{ $configuration.value?.appName }} v{{ $configuration.value?.version }}</div>
         <q-separator vertical inset />
         <q-toggle
           v-model="$q.dark.isActive"

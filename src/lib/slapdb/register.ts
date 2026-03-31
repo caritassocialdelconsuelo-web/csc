@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { Table, Transaction } from 'dexie';
+import type { Transaction } from 'dexie';
 import { type SlapBaseEntity } from './SlapBaseEntity';
+import { type SlapDB } from '.';
 
 //export const registeredEntitys: {
 //  [key: string]: {
@@ -11,25 +12,22 @@ import { type SlapBaseEntity } from './SlapBaseEntity';
 //} = {};
 
 //Function de Register
-export const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<any, any>) => {
+export const registerEntity = (classEntity: typeof SlapBaseEntity, db: SlapDB) => {
   console.log(
-    `registerEntity--->Registrando la clase de la entidad ${classEntity._configuration.schemaInfo.entityName} en la tabla: ${table.name} de Dexie`,
+    `registerEntity--->Registrando la clase de la entidad ${classEntity._configuration.schemaInfo.entityName} `,
   );
   //Asocia la tabla de Dexie y la entidad
-  classEntity._configuration.dbstate.table = table;
+  classEntity._configuration.dbstate.db = db;
   //Registramos Hooks
-
+  const table = classEntity.table;
   //Hook de creación
-  classEntity._configuration.dbstate.table.hook(
-    'creating',
-    (primKey: any, obj: any, transaction: Transaction) => {
-      return classEntity.hookCreating(classEntity, primKey, obj, transaction);
-    },
-  );
+  table.hook('creating', (primKey: any, obj: any, transaction: Transaction) => {
+    return classEntity.hookCreating(classEntity, primKey, obj, transaction);
+  });
   //(classEntity.hookCreating as any).relClass = classEntity;
 
   //Hook de borrado
-  classEntity._configuration.dbstate.table.hook(
+  table.hook(
     // Registramos el hook "deleting"
     'deleting',
     (primKey: any, obj: any, transaction: Transaction) => {
@@ -39,7 +37,7 @@ export const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<
   //(classEntity.hookDeleting as any).relClass = classEntity;
 
   //Hook de updating
-  classEntity._configuration.dbstate.table.hook(
+  table.hook(
     // Registramos el hook "updating"
     'updating',
     (modifications: any, primKey: any, obj: any, transaction: Transaction) => {
@@ -49,7 +47,7 @@ export const registerEntity = (classEntity: typeof SlapBaseEntity, table: Table<
   //(classEntity.hookUpdating as any).relClass = classEntity;
   //Hook de reading
 
-  classEntity._configuration.dbstate.table.hook('reading', (obj: any) => {
+  table.hook('reading', (obj: any) => {
     return classEntity.hookReading(classEntity, obj);
   });
 };

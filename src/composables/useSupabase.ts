@@ -1,23 +1,20 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { ref } from 'vue';
-const supabase = ref<SupabaseClient>(
-  createClient(
-    import.meta?.env?.VITE_SUPABASE_URL || process?.env?.VITE_SUPABASE_URL || '', // e.g. https://xyzcompany.supabase.co
-    import.meta?.env?.VITE_SUPABASE_ANON_KEY || process?.env?.VITE_SUPABASE_ANON_KEY || '', // anon key for browsers
-    {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-        // Esto asegura que use un sistema de guardado estándar
-        // y ayuda a mitigar problemas de concurrencia en local
-        storageKey: 'slap-db-auth-token',
-      },
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(
+  import.meta?.env?.VITE_SUPABASE_URL || process?.env?.VITE_SUPABASE_URL || '', // e.g. https://xyzcompany.supabase.co
+  import.meta?.env?.VITE_SUPABASE_ANON_KEY || process?.env?.VITE_SUPABASE_ANON_KEY || '', // anon key for browsers
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      // Esto asegura que use un sistema de guardado estándar
+      // y ayuda a mitigar problemas de concurrencia en local
+      storageKey: 'slap-db-auth-token',
     },
-    // optional options object here
-  ),
+  },
+  // optional options object here
 );
-if (supabase.value) {
+if (supabase) {
   console.log('✅ Supabase Client inicializado correctamente.');
 } else {
   console.error('❌ Error al inicializar Supabase Client. Verifica las variables de entorno.');
@@ -27,8 +24,8 @@ export function useSupabase() {
 }
 export async function getCurrentUser() {
   try {
-    if (supabase.value) {
-      return (await supabase.value.auth.getUser()).data.user;
+    if (supabase) {
+      return (await supabase.auth.getUser()).data.user;
     } else {
       console.warn('⚠️ Supabase no está inicializado. No se puede obtener el usuario actual.');
       return null;

@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Ref } from 'vue';
+import { ref } from 'vue';
 import { SlapDB } from '.';
 import { type Metaclass } from '../utils';
 import { References } from './fk';
@@ -56,7 +58,13 @@ export function Entity(entityName: string, syncTableName: string) {
   };
 }
 //Decorador de propiedad para marcar un campo como columna de la base de datos
-export function Column(tipo: TColumnType = 'data', indexed: boolean = false, func?: ((newVal: any, oldVal: any, obj: SlapBaseEntity) => Error | boolean) | ((obj: SlapBaseEntity) => any)) {
+export function Column(
+  tipo: TColumnType = 'data',
+  indexed: boolean = false,
+  func?:
+    | ((newVal: any, oldVal: any, obj: SlapBaseEntity) => Error | boolean)
+    | ((obj: SlapBaseEntity) => any),
+) {
   return function (target: any, key: string) {
     // Obtenemos o inicializamos la lista de columnas en el prototipo
     const MiClase = target.constructor;
@@ -102,7 +110,7 @@ export function Column(tipo: TColumnType = 'data', indexed: boolean = false, fun
           if (res) {
             this.setField(key, newVal);
           } else {
-            throw Error("No se ha podido actualizar porque fallaron las reglas de validación")
+            throw Error('No se ha podido actualizar porque fallaron las reglas de validación');
           }
         } else {
           throw res;
@@ -114,7 +122,11 @@ export function Column(tipo: TColumnType = 'data', indexed: boolean = false, fun
   };
 }
 
-export function OneToMany(funcToChildClass: () => typeof SlapBaseEntity, funcFieldReference: (children: SlapBaseEntity) => any, referenceFieldName: string) {
+export function OneToMany(
+  funcToChildClass: () => typeof SlapBaseEntity,
+  funcFieldReference: (children: SlapBaseEntity) => any,
+  referenceFieldName: string,
+) {
   return function (target: any, key: string) {
     const MiClase = target.constructor;
     const config = MiClase._configuration as IConfigSlapEntity;
@@ -124,22 +136,28 @@ export function OneToMany(funcToChildClass: () => typeof SlapBaseEntity, funcFie
       tipo: 'reference',
       funcToChildClass,
       funcFieldReference,
-      referenceFieldName
+      referenceFieldName,
     };
     config.schemaInfo.referenceColumns[key] = field;
     delete target[key];
-    const referencesArray = new References(field, target)
+    const fieldName = `_${key}_refArray`;
     Object.defineProperty(target, key, {
       get() {
-        return referencesArray;
-      },//Los campos de referencia hijas son computados.
+        if (!this[fieldName]) {
+          this[fieldName] = new References(field, this);
+        }
+        return this[fieldName];
+      }, //Los campos de referencia hijas son computados.
       enumerable: true,
       configurable: false,
     });
-  }
+  };
 }
 
-export function ManyToOne(funcToMainClass: () => typeof SlapBaseEntity, funcFieldReferred: (main: SlapBaseEntity) => any) {
+export function ManyToOne(
+  funcToMainClass: () => typeof SlapBaseEntity,
+  funcFieldReferred: (main: SlapBaseEntity) => any,
+) {
   return function (target: any, key: string) {
     const MiClase = target.constructor;
     const config = MiClase._configuration as IConfigSlapEntity;
@@ -148,21 +166,70 @@ export function ManyToOne(funcToMainClass: () => typeof SlapBaseEntity, funcFiel
       indexed: false,
       tipo: 'referred',
       funcToMainClass,
-      funcFieldReferred
+      funcFieldReferred,
     };
     config.schemaInfo.referredColumns[key] = field;
+    config.schemaInfo.indexedColumns[key] = key;
     delete target[key];
-    const referred = new Referred<SlapBaseEntity>(field)
+    const fieldName = `_${key}_refObject`;
     Object.defineProperty(target, key, {
-      get() {
-        return referred;
+      get(): Promise<Ref<SlapBaseEntity | undefined> | string> {
+        if (!(fieldName in this)) {
+          this[fieldName] = ref();
+        }
+        const referred = this[fieldName];
+        if (referred.value) {
+          return Promise.resolve(referred);
+        }
+        const keyReferred = this.getField(key);
+        try {
+          if (funcToMainClass) {
+            return funcToMainClass()
+              .get(keyReferred)
+              .then((obj) => {
+                if (obj) {
+                  referred.value = obj;
+                  return referred;
+                } else {
+                  return keyReferred;
+                }
+              })
+              .catch((error) => {
+                console.log(
+                  `Error en un campo referido en ${target.name} campo:${key} con el error:`,
+                  error,
+                );
+                return keyReferred;
+              });
+          }
+        } catch (error) {
+          console.log(
+            `Error en un campo referido en ${target.name} campo:${key} con el error:`,
+            error,
+          );
+        }
+        return Promise.resolve(keyReferred);
       },
-      set(newValue: any) {
-        referred.setValue(newValue);
+      set(newVal: any) {
+        if (!(fieldName in this)) {
+          this[fieldName] = ref();
+        }
+        const keyReferred = this.getField(key);
+        if (typeof newVal !== 'string' && newVal) {
+          this[fieldName].value = newVal;
+          newVal = funcFieldReferred ? funcFieldReferred(newVal) : newVal.id; //Dependiendo de si newVal es un string o es un objeto va a intentar recuperar el valor clave.
+        } else {
+          if (newVal !== keyReferred) {
+            this[fieldName].value = undefined;
+          }
+        }
+        if (newVal !== keyReferred) {
+          this.setField(key, newVal);
+        }
       },
       //Los campos de referencia hijas son computados.
       enumerable: true,
       configurable: false,
     });
-  }
+  };
 }

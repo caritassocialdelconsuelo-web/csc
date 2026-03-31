@@ -22,8 +22,8 @@ export class Destructibles {
   private static keyMap = new Map<string, IDestructibleAssociated>();
   private static register(obj: Destructibles, objAssociated: any = null): any {
     const reference = new WeakRef(obj);
-    this.regObj.register(obj, obj._iternalKey, obj);
-    const keyObj = this.keyMap.get(obj._iternalKey);
+    this.regObj.register(obj, obj._internalKey, obj);
+    const keyObj = this.keyMap.get(obj._internalKey);
     if (keyObj) //Pregunta si la clave existe
     {
       keyObj.referrers.push(reference);
@@ -33,14 +33,14 @@ export class Destructibles {
         keyObj.associatedData = ref(objAssociated);
       }
     } else {
-      this.keyMap.set(obj._iternalKey, {
+      this.keyMap.set(obj._internalKey, {
         associatedData: ref(objAssociated),
         referrers: [reference],
       });
     }
   }
   private static unregister(obj: Destructibles): any | undefined {
-    const keyObj = this.keyMap.get(obj._iternalKey);
+    const keyObj = this.keyMap.get(obj._internalKey);
     if (keyObj) {
       const { referrers } = keyObj;
       const newReferrers = referrers.filter((e) => e.deref() !== undefined && e.deref() !== obj);
@@ -85,28 +85,28 @@ export class Destructibles {
       return resReferrers;
     }
   }
-  private _iternalKey!: string;
+  private _internalKey!: string;
   protected get internalKey() {
-    return this._iternalKey;
+    return this._internalKey;
   }
   protected set internalKey(newVal: string) {
-    if (newVal !== this._iternalKey) {
+    if (newVal !== this._internalKey) {
       let associatedObject: any;
-      if (this._iternalKey) {
+      if (this._internalKey) {
         associatedObject = this.staticSelf.unregister(this);
       }
-      this._iternalKey = newVal;
+      this._internalKey = newVal;
       this.staticSelf.register(this, associatedObject); //Cuando cambia la clave desregistra y reregista en la nueva clave
     }
   }
   protected get associatedData(): any {
-    return this.staticSelf.getAssociatedData(this._iternalKey);
+    return this.staticSelf.getAssociatedData(this._internalKey);
   }
   protected set associatedData(newVal: any) {
-    this.staticSelf.setAssociatedData(this._iternalKey, newVal);
+    this.staticSelf.setAssociatedData(this._internalKey, newVal);
   }
   public get refAssociatedData() {
-    return this.staticSelf.getRefAssociatedData(this._iternalKey);
+    return this.staticSelf.getRefAssociatedData(this._internalKey);
   }
   protected get staticSelf() {
     return this.constructor as typeof Destructibles;

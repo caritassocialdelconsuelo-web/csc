@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { type SupabaseClient } from '@supabase/supabase-js';
-import type { Table } from 'dexie';
 import type { Ref } from 'vue';
 import type { Destructibles } from './SlapDestructibles';
 import type { SlapBaseEntity } from './SlapBaseEntity';
+import type { SlapDB } from '.';
 
 export interface ICustomScriptCode {
   get sqlCode(): string;
@@ -25,7 +25,14 @@ export interface IRealtimeSynchronize {
 export interface IDictionary<T> {
   [key: string]: T;
 }
-export type TColumnType = 'metadata' | 'data' | 'key' | 'system' | 'computed' | 'reference' | 'referred';
+export type TColumnType =
+  | 'metadata'
+  | 'data'
+  | 'key'
+  | 'system'
+  | 'computed'
+  | 'reference'
+  | 'referred';
 
 export interface IColumnDescriptor {
   name: string;
@@ -50,7 +57,7 @@ export interface IConfigSlapEntity {
     entityName?: string; //Nombre de la entidad, se setea con el decorador @Entity
   };
   dbstate: {
-    table: Table<any, any>;
+    db: SlapDB;
     registrable: boolean; //Indica si esta clase se registra en la base de datos, por defecto es false, las clases que se quieran registrar deden usar el decorador @Entity, que setea este valor a true
     registered: boolean; //Indica si esta clase ya se ha registrado en la base de datos, para evitar registros duplicados, se setea a true cuando se registra la clase
     syncTableName?: string; //Nombre de la tabla en la base de datos, se setea con el decorador @Entity, si no se setea se usa el nombre de la clase

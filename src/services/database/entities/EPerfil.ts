@@ -1,6 +1,6 @@
 //Declaración de la entidad Perfil
 
-import { useSession } from 'src/composables/useSession';
+import { forceSession, useSession } from 'src/composables/useSession';
 import { Column, Entity } from 'src/lib/slapdb/decorators';
 import { SlapBaseEntityWithReplycation } from 'src/lib/slapdb/SlapBaseEntityWithReplycation';
 import {
@@ -43,9 +43,10 @@ export class EPerfil
   async generateId() {
     //implementación de la generación de ID personalizada
     try {
+      await forceSession();
       const {
         session: { value: session },
-      } = await useSession();
+      } = useSession();
       if (session?.user?.id) {
         return session.user.id;
       } else {
@@ -74,50 +75,63 @@ export class EPerfil
     $$ language 'plpgsql';
     -- 2.a Create SEQUENCE para generar IDs únicos (Si no existe)
 
-    CREATE SEQUENCE IF NOT EXISTS public.seq_checkPoint_${this.staticSelf.syncTableName}
+    CREATE SEQUENCE IF NOT EXISTS public.seq_checkPoint_${this.staticSelf._composeConfiguration.dbstate.syncTableName}
     START WITH 1;
 
-    -- 2. Tabla ${this.staticSelf.syncTableName}
-    CREATE TABLE IF NOT EXISTS public."${this.staticSelf.syncTableName}" (
+    -- 2. Tabla ${this.staticSelf._composeConfiguration.dbstate.syncTableName}
+    CREATE TABLE IF NOT EXISTS public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" (
         id UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
         data JSONB,
         metadata JSONB,
-        checkPoint BIGINT NOT NULL DEFAULT nextval('public.seq_checkPoint_${this.staticSelf.syncTableName}'),
+        checkPoint BIGINT NOT NULL DEFAULT nextval('public.seq_checkPoint_${this.staticSelf._composeConfiguration.dbstate.syncTableName}'),
         CONSTRAINT chk_estado CHECK ((data->>'estado') IN ('activo', 'inactivo', 'suspendido')),
         CONSTRAINT chk_username CHECK (char_length(data->>'username') >= 3)
     );
 
     -- Índices
-    CREATE INDEX IF NOT EXISTS "idx_tperfil_email" ON public."${this.staticSelf.syncTableName}" ((data->>'email'));
-    CREATE INDEX IF NOT EXISTS "idx_tperfil_username" ON public."${this.staticSelf.syncTableName}" ((data->>'username'));
-    CREATE INDEX IF NOT EXISTS "idx_tperfil_checkPoint" ON public."${this.staticSelf.syncTableName}" (checkPoint);
+    CREATE INDEX IF NOT EXISTS "idx_tperfil_email" ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" ((data->>'email'));
+    CREATE INDEX IF NOT EXISTS "idx_tperfil_username" ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" ((data->>'username'));
+    CREATE INDEX IF NOT EXISTS "idx_tperfil_checkPoint" ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" (checkPoint);
 
     -- 3. Habilitar RLS (Seguridad corregida)
-    ALTER TABLE public."${this.staticSelf.syncTableName}" ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" ENABLE ROW LEVEL SECURITY;
 
     -- 4. Política de Acceso (Corregida)
 
-    DROP POLICY IF EXISTS "Usuarios pueden ver su propio perfil" ON public."${this.staticSelf.syncTableName}";
+    DROP POLICY IF EXISTS "Usuarios pueden ver su propio perfil" ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}";
     CREATE POLICY "Usuarios pueden ver su propio perfil"
-      ON public."${this.staticSelf.syncTableName}" FOR SELECT
+      ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" FOR SELECT
         USING ((select auth.uid()) = id);
 
-    DROP POLICY IF EXISTS "Usuarios pueden modificar su propio perfil" ON public."${this.staticSelf.syncTableName}";
+    DROP POLICY IF EXISTS "Usuarios pueden modificar su propio perfil" ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}";
     CREATE POLICY "Usuarios pueden modificar su propio perfil"
-      ON public."${this.staticSelf.syncTableName}" FOR update
+      ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" FOR update
         USING ((select auth.uid()) = id);
     -- Política para permitir el INSERT inicial del Upsert
+    DROP POLICY IF EXISTS "Usuarios pueden insertar su propio perfil" ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}";
     CREATE POLICY "Usuarios pueden insertar su propio perfil"
-      ON public."${this.staticSelf.syncTableName}" FOR INSERT
+      ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" FOR INSERT
       WITH CHECK (auth.uid() = "id");
-
-    ALTER PUBLICATION supabase_realtime ADD TABLE "${this.staticSelf.syncTableName}";
+    -- Publicacion de la tabla
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+          SELECT 1
+          FROM pg_publication_tables
+          WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'public'
+          AND tablename = '${this.staticSelf._composeConfiguration.dbstate.syncTableName}'
+      ) THEN
+      -- If not, add the table
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.${this.staticSelf._composeConfiguration.dbstate.syncTableName};
+      END IF;
+    END $$;
 
     -- 5. Trigger para _modified
     -- Eliminamos primero por si estás re-ejecutando el script
-    DROP TRIGGER IF EXISTS set_modified_tperfil ON public."${this.staticSelf.syncTableName}";
+    DROP TRIGGER IF EXISTS set_modified_tperfil ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}";
     CREATE TRIGGER set_modified_tperfil
-      BEFORE UPDATE ON public."${this.staticSelf.syncTableName}"
+      BEFORE UPDATE ON public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}"
     FOR EACH ROW
       EXECUTE FUNCTION update_modified_column();
     -- 6. Función Trigger para creación automática (Consistente con comillas)
@@ -134,7 +148,7 @@ export class EPerfil
     -- Truncamos a 120 para que no falle el INSERT si es muy largo
         initial_username := substring(initial_username from 1 for 120);
 
-      INSERT INTO public."${this.staticSelf.syncTableName}" (
+      INSERT INTO public."${this.staticSelf._composeConfiguration.dbstate.syncTableName}" (
           id,
           data,
           metadata,
@@ -154,7 +168,7 @@ export class EPerfil
             'deletedAt', null,
             'deleted', false
           ),
-          nextval('public.seq_checkPoint_${this.staticSelf.syncTableName}') --Crea el proximo valor de sequencia para syncronizar
+          nextval('public.seq_checkPoint_${this.staticSelf._composeConfiguration.dbstate.syncTableName}') --Crea el proximo valor de sequencia para syncronizar
         );
 
       RETURN new;

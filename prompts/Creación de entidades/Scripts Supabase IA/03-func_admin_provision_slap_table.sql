@@ -2,7 +2,7 @@ CREATE OR REPLACE FUNCTION admin_provision_slap_table(p_table_name TEXT)
 RETURNS JSONB AS $$
 
 DECLARE
-    v_seq_name TEXT := 'seq_checkPoint_' || p_table_name;
+    v_seq_name TEXT := 'seq_checkpoint_' || LOWER(p_table_name);
     v_has_permission BOOLEAN;
 BEGIN
     -- 1. Verificación de Seguridad via auth.uid()
@@ -23,7 +23,7 @@ BEGIN
     -- 3. Crear la Tabla (Estructura base)
     EXECUTE format('
         CREATE TABLE IF NOT EXISTS %I (
-            id string PRIMARY KEY ,
+            id VARCHAR(36) PRIMARY KEY ,
             checkpoint BIGINT DEFAULT 0,
             data JSONB,
             metadata JSONB
@@ -31,7 +31,7 @@ BEGIN
 
     -- 4. Crear Índice de Sincronización
     EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I (checkpoint)', 
-        'idx_sync_' || p_table_name, p_table_name);
+        'idx_sync_' || LOWER(p_table_name), p_table_name);
 
     RETURN jsonb_build_object(
         'status', 'success',

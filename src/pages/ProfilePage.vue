@@ -73,7 +73,7 @@
             />
             <q-input
               v-model="$configuration.value.appName"
-              :label="$configuration.value.supabase.session?.user.email"
+              :label="$configuration.value?.supabase.session?.user.email"
               outlined
               class="col-12 col-sm-6"
               :rules="[(val) => !!val || 'El apellido es requerido']"
@@ -126,11 +126,9 @@ import { useQuasar } from 'quasar';
 
 import { prepareDb } from '../composables/useDb';
 import { useSupabase } from '../composables/useSupabase';
-import { EPerfil } from 'src/services/database/entities/perfil';
+import { EPerfil } from 'src/services/database/entities/EPerfil';
 
-const {
-  supabase: { value: supabase },
-} = useSupabase();
+const { supabase } = useSupabase();
 
 // CONSTANTES
 const IDIOMA_OPTIONS = [

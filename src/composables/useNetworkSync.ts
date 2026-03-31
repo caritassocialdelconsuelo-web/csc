@@ -1,12 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { connectToCurrentUserDb } from 'src/composables/useDb';
 // composables/useNetworkSync.ts (Vue 3 / Quasar)
 import { onMounted, onUnmounted } from 'vue';
-import { useSupabase } from './useSupabase';
 
-const {
-  supabase: { value: supabase },
-} = useSupabase();
 let handledOnline = () => {
   return;
 };
@@ -22,7 +17,7 @@ export function useNetworkSync() {
       return;
     } else {
       console.log('Conexión a la base de datos del usuario actual establecida.');
-      handledOnline = () => void db?.handleOnline(supabase as unknown as any);
+      handledOnline = () => void db?.handleOnline();
       handledOffline = () => db?.handleOffline();
 
       // Si la conexión es exitosa, configuramos los manejadores de eventos

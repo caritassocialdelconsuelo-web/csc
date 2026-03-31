@@ -1,14 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { liveQuery, Transaction, Observable } from 'dexie';
+import { liveQuery, Transaction, Observable, IndexableType } from 'dexie';
 import { BehaviorSubject, debounceTime, distinctUntilChanged, switchMap, from } from 'rxjs';
 import { Column } from './decorators';
-import { IConfigSlapEntity, IcurrentDbData, IDictionary, TDataSlapEntity } from './SlapTypes';
+import { IConfigSlapEntity, TDataSlapEntity } from './SlapTypes';
 import { mergeObjects, Metaclass } from '../utils';
 import { Destructibles } from './SlapDestructibles';
-import { useDatabase } from 'src/composables/useDb';
-import { useSupabase } from 'src/composables/useSupabase';
-import { SupabaseClient } from '@supabase/supabase-js';
 import { SlapBaseEntityWithReplycation } from './SlapBaseEntityWithReplycation';
 
 //Clase base para todas las entidades con ID generado por UUID
@@ -26,6 +23,8 @@ export class SlapBaseEntity extends Destructibles {
         systemColumns: {},
         indexedColumns: {},
         indexCompositeKeys: {},
+        referredColumns: {},
+        referenceColumns: {},
       },
       dbstate: {},
     });
@@ -84,6 +83,7 @@ export class SlapBaseEntity extends Destructibles {
 
   [key: string]: any; //Define un diccionario dinámico para la clase
 
+  _updating: boolean;
   @Column('key')
   id: string | null = null;
 
@@ -91,6 +91,7 @@ export class SlapBaseEntity extends Destructibles {
   constructor(data?: TDataSlapEntity, fromDb: boolean = false) {
     const key = fromDb && data ? new.target.getUniqueKey(data) : null;
     super(key);
+    this._updating = false;
   }
 
   //Metodos estaticos de la clase base para todas las entidades (colecciones)
@@ -101,7 +102,7 @@ export class SlapBaseEntity extends Destructibles {
       return observer$;
     } catch (error) {
       console.log(
-        `Error en getLiveQuery$() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en getLiveQuery$() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
       // Fallback to an empty observable to keep return type consistent
@@ -136,7 +137,7 @@ export class SlapBaseEntity extends Destructibles {
       };
     } catch (error) {
       console.log(
-        `Error en getLiveQueryWithParams$() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en getLiveQueryWithParams$() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
       // Fallback to an empty observable to keep return type consistent
@@ -158,12 +159,16 @@ export class SlapBaseEntity extends Destructibles {
     }
   }
   // Lectura
+  static get table() {
+    const conf = this._composeConfiguration;
+    return conf.dbstate.db.table(conf.schemaInfo.entityName || '');
+  }
   static async get(id: any) {
     try {
-      return await this._configuration.dbstate.table.get(id);
+      return await this.table.get(id);
     } catch (error) {
       console.log(
-        `Error en get() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en get() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -171,10 +176,10 @@ export class SlapBaseEntity extends Destructibles {
 
   static async all() {
     try {
-      return await this._configuration.dbstate.table.toArray();
+      return await this.table.toArray();
     } catch (error) {
       console.log(
-        `Error en all() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en all() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -182,10 +187,10 @@ export class SlapBaseEntity extends Destructibles {
 
   static async count(): Promise<number | undefined> {
     try {
-      return await this._configuration.dbstate.table.count();
+      return await this.table.count();
     } catch (error) {
       console.log(
-        `Error en count() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en count() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -194,10 +199,10 @@ export class SlapBaseEntity extends Destructibles {
   // Escritura Masiva
   static async bulkAdd(entities: any[]) {
     try {
-      return await this._configuration.dbstate.table.bulkAdd(entities);
+      return await this.table.bulkAdd(entities);
     } catch (error) {
       console.log(
-        `Error en bulkAdd(entities: any[]) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en bulkAdd(entities: any[]) de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -205,10 +210,10 @@ export class SlapBaseEntity extends Destructibles {
 
   static async bulkPut(entities: any[]) {
     try {
-      return await this._configuration.dbstate.table.bulkPut(entities);
+      return await this.table.bulkPut(entities);
     } catch (error) {
       console.log(
-        `Error en bulkPut(entities: any[]) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en bulkPut(entities: any[]) de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -216,10 +221,10 @@ export class SlapBaseEntity extends Destructibles {
 
   static async bulkDelete(ids: any[]) {
     try {
-      return await this._configuration.dbstate.table.bulkDelete(ids);
+      return await this.table.bulkDelete(ids);
     } catch (error) {
       console.log(
-        `Error en bulkDelete(ids: any[]) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en bulkDelete(ids: any[]) de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -228,10 +233,10 @@ export class SlapBaseEntity extends Destructibles {
   // Limpieza
   static async clear() {
     try {
-      return await this._configuration.dbstate.table.clear();
+      return await this.table.clear();
     } catch (error) {
       console.log(
-        `Error en clear() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en clear() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -240,10 +245,10 @@ export class SlapBaseEntity extends Destructibles {
   // Consultas Rápidas
   static where(index: string) {
     try {
-      return this._configuration.dbstate.table.where(index);
+      return this.table.where(index);
     } catch (error) {
       console.log(
-        `Error en where(index: string) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en where(index: string) de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -251,10 +256,10 @@ export class SlapBaseEntity extends Destructibles {
 
   static orderBy(index: string) {
     try {
-      return this._configuration.dbstate.table.orderBy(index);
+      return this.table.orderBy(index);
     } catch (error) {
       console.log(
-        `Error en orderBy(index: string) de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en orderBy(index: string) de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -263,10 +268,10 @@ export class SlapBaseEntity extends Destructibles {
   // Métodos personalizados de tu lógica SlapDb
   static async filterByEstado(estado: string) {
     try {
-      return await this._configuration.dbstate.table.where('estado').equals(estado).toArray();
+      return await this.table.where('estado').equals(estado).toArray();
     } catch (error) {
       console.log(
-        `Error en filterByEstado de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en filterByEstado de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -284,10 +289,10 @@ export class SlapBaseEntity extends Destructibles {
   // Método estático universal para contar registros
   static async contar(): Promise<number | undefined> {
     try {
-      return await this._configuration.dbstate.table.count();
+      return await this.table.count();
     } catch (error) {
       console.log(
-        `Error en contar() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en contar() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -311,13 +316,13 @@ export class SlapBaseEntity extends Destructibles {
       if ('objectCreator' in obj) {
         const objectCreator: SlapBaseEntity = obj.objectCreator;
         delete obj.objectCreator;
-        objectCreator.refDbData = obj;
+        objectCreator.associatedData = obj;
       }
       myClass.checkInMemory(obj.id, obj);
       return obj.id; //Devuelve la PK para que Dexie la use
     } catch (error) {
       console.log(
-        `Error en hookCreate() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en hookCreate() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -335,7 +340,7 @@ export class SlapBaseEntity extends Destructibles {
       //        console.log(`Error en hookDeleting() -hookContext- de ${this.entityName}:`, error);
     } catch (error) {
       console.log(
-        `Error en hookDeleting() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en hookDeleting() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -353,7 +358,7 @@ export class SlapBaseEntity extends Destructibles {
       return modifications; //Devuelve las modificaciones para que Dexie las aplique
     } catch (error) {
       console.log(
-        `Error en hookUpdating() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en hookUpdating() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -369,7 +374,7 @@ export class SlapBaseEntity extends Destructibles {
       }
     } catch (error) {
       console.log(
-        `Error en hookReading() de la clase de la entidad ${this._configuration.schemaInfo.entityName}:`,
+        `Error en hookReading() de la clase de la entidad ${this._composeConfiguration.schemaInfo.entityName}:`,
         error,
       );
     }
@@ -390,6 +395,8 @@ export class SlapBaseEntity extends Destructibles {
       const copiaMetaData: any = {};
       const copiaKeys: any = {};
       const copiaSystem: any = {};
+      const copiaReferred: any = {};
+
       const composeConfig = this._composeConfiguration;
 
       for (const col in composeConfig.schemaInfo.columns) {
@@ -416,18 +423,26 @@ export class SlapBaseEntity extends Destructibles {
           if (typeof data !== 'function') copiaSystem[`_${col}`] = data;
         }
       }
+      for (const col in composeConfig.schemaInfo.referredColumns) {
+        if (col in item) {
+          const data = item.getField(col); //Obtenemos la clave el Id no el objeto que devuelve el get.
+          if (typeof data !== 'function') copiaReferred[col] = data;
+        }
+      }
+
       return {
         ...copiaKeys,
         //...(forSynchronization ? copiaSystem : {}),
         ...copiaSystem,
         ...copiaData,
         ...copiaMetaData,
+        ...copiaReferred,
       };
     } else {
       if (item) {
         const referrer = item.refAssociatedData;
         if (referrer) {
-          return !item._newObject
+          return item._newObject
             ? { ...referrer.value, ...{ objectCreator: item } }
             : referrer.value;
         }
@@ -451,36 +466,69 @@ export class SlapBaseEntity extends Destructibles {
    * Guarda o actualiza la instancia actual en la base de datos.
    * Si no tiene ID y tienes un Hook de UUID, se le asignará uno.
    */
-  async save(): Promise<string | number | undefined> {
+  async save(): Promise<IndexableType | null | undefined> {
     try {
-      const table = this.staticSelf._configuration.dbstate.table;
+      const table = this.staticSelf.table;
       if (!this.id) {
         if ('generateId' in this && typeof this.generateId === 'function') {
           this.id = await this.generateId();
         } //Si no implementa custom generator ID, se le asignará un UUID en el hook de creación de la base de datos
       }
-      const objData = this.getObjectData();
+      const objData = this.staticSelf.getStaticObjectData(this, true);
       // Guardamos y recuperamos la PK resultante
-      const pk = await table.put(this.getObjectData());
+      const lastUsedkey = this.id;
+      this._updating = true;
+      const pk = await table.put(objData);
       // Si la base de datos generó o cambió el ID, lo actualizamos en la instancia
-      if (!this.id && typeof pk === 'string') {
+      if (
+        ((!this.id || !lastUsedkey) && typeof pk === 'string') ||
+        ((this.id || lastUsedkey) &&
+          typeof pk === 'string' &&
+          (this.id !== pk || lastUsedkey !== pk))
+      ) {
         this.id = pk;
         this.internalKey = pk;
+        //Cambio de clave
+        for (const col in this.staticSelf._composeConfiguration.schemaInfo.referenceColumns) {
+          const field = this.staticSelf._composeConfiguration.schemaInfo.referenceColumns[col];
+          for (const reference of this[col]) {
+            if (field?.referenceFieldName) {
+              if (reference.getField(field.referenceFieldName) !== pk) {
+                reference[field.referenceFieldName] = pk;
+              }
+            }
+          }
+        }
+      }
+      //Persistir no persistidos.
+      for (const col in this.staticSelf._composeConfiguration.schemaInfo.referenceColumns) {
+        for (const reference of this[col]) {
+          if (!reference._persisted) {
+            await reference.save();
+          }
+        }
       }
       this._persisted = true;
-      await useDatabase()?.db.value?.syncTable(
-        useSupabase().supabase.value as unknown as SupabaseClient,
-        this.staticSelf as unknown as SlapBaseEntityWithReplycation,
-      );
       this._newObject = false;
+      setTimeout(
+        () => {
+          void this.staticSelf._composeConfiguration.dbstate.db.syncTable(
+            this.staticSelf._composeConfiguration.dbstate.db._supabase,
+            this.staticSelf as unknown as SlapBaseEntityWithReplycation,
+          );
+        },
+        import.meta.env.VITE_SUPABASE_IMMEDIATE_MS || 300,
+      );
       return pk;
     } catch (error) {
       console.log(
-        `Error en save() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
+        `Error en save() de la clase de la entidad ${this.staticSelf._composeConfiguration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
       );
+    } finally {
+      this._updating = false;
     }
   }
 
@@ -492,10 +540,10 @@ export class SlapBaseEntity extends Destructibles {
       if (!this.id) {
         throw new Error('No se puede eliminar una instancia que no tiene ID (no existe en DB).');
       }
-      await this.staticSelf._configuration.dbstate.table.delete(this.id);
+      await this.staticSelf.table.delete(this.id);
     } catch (error) {
       console.log(
-        `Error en delete() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
+        `Error en delete() de la clase de la entidad ${this.staticSelf._composeConfiguration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -514,10 +562,7 @@ export class SlapBaseEntity extends Destructibles {
       }
 
       // Aplicamos los cambios a la DB
-      const updatedCount = await this.staticSelf._configuration.dbstate.table.update(
-        this.id,
-        changes,
-      );
+      const updatedCount = await this.staticSelf.table.update(this.id, changes);
 
       // Si la DB se actualizó, aplicamos los cambios también a esta instancia en memoria
       if (updatedCount) {
@@ -526,7 +571,7 @@ export class SlapBaseEntity extends Destructibles {
       return updatedCount;
     } catch (error) {
       console.log(
-        `Error en update() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
+        `Error en update() de la clase de la entidad ${this.staticSelf._composeConfiguration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -542,7 +587,7 @@ export class SlapBaseEntity extends Destructibles {
     try {
       if (!this.id) return undefined;
 
-      const freshData = await this.staticSelf._configuration.dbstate.table.get(this.id);
+      const freshData = await this.staticSelf.table.get(this.id);
       if (freshData) {
         Object.assign(this, freshData);
         return this;
@@ -550,7 +595,7 @@ export class SlapBaseEntity extends Destructibles {
       return undefined;
     } catch (error) {
       console.log(
-        `Error en reload() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
+        `Error en reload() de la clase de la entidad ${this.staticSelf._composeConfiguration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),
@@ -570,7 +615,7 @@ export class SlapBaseEntity extends Destructibles {
       return copy;
     } catch (error) {
       console.log(
-        `Error en clone() de la clase de la entidad ${this.staticSelf._configuration.schemaInfo.entityName}:`,
+        `Error en clone() de la clase de la entidad ${this.staticSelf._composeConfiguration.schemaInfo.entityName}:`,
         error,
         'data==>',
         JSON.stringify(this),

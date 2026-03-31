@@ -2,7 +2,7 @@ import { useMyConfiguration } from './../composables/useGlobalConfiguration';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { boot } from 'quasar/wrappers';
 import { prepareDb } from 'src/composables/useDb';
-import { registerAutomaticConnect } from 'src/composables/useSession';
+import { forceSession, registerAutomaticConnect } from 'src/composables/useSession';
 //import { startAllReplications } from 'src/services/database/replication';
 import { useSupabase } from 'src/composables/useSupabase';
 // En tu archivo principal o donde se defina las clases ppales
@@ -37,46 +37,46 @@ export default boot(({ app, router }) => {
       if (accessToken && refreshToken) {
         // 2. INYECCIÓN FORZADA EN SUPABASE
         // Esto le dice a Supabase: "Aquí tienes los tokens, crea la sesión ya"
-        const { data, error } = await myConfiguration.value.supabase.client.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        console.log('Error al crear la sesion', error);
-
-        if (data?.session) {
-          console.log('✅ Sesión forzada con éxito para:', data.session.user.id);
-          const userId = data.session.user.id;
-          // 3. INICIALIZACIÓN DE SlapBase
-
-          const db = prepareDb(userId);
-          /*const p = new EPerfil({
-            apellido: 'Celli',
-            avatarUrl: '',
-            fechaCreacion: new Date(),
-            email: 'cellipablo@gmai.com',
-            primerNombre: 'Pablo',
-            tema: 'dark',
-            username: 'pcelli',
+        if (myConfiguration?.value) {
+          const { data, error } = await myConfiguration.value.supabase.client.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
           });
-          await p.save();*/
-          // Llamamos al replicador
-          //if (navigator.onLine) {
-          //  await startAllReplications(db, data.session.user.id);
-          //}
+          console.log('Error al crear la sesion', error);
 
-          // Limpiamos la URL y entramos
-          return '/profile';
+          if (data?.session) {
+            console.log('✅ Sesión forzada con éxito para:', data.session.user.id);
+            const userId = data.session.user.id;
+            // 3. INICIALIZACIÓN DE SlapBase
+
+            const db = prepareDb(userId);
+            /*const p = new EPerfil({
+              apellido: 'Celli',
+              avatarUrl: '',
+              fechaCreacion: new Date(),
+              email: 'cellipablo@gmai.com',
+              primerNombre: 'Pablo',
+              tema: 'dark',
+              username: 'pcelli',
+            });
+            await p.save();*/
+            // Llamamos al replicador
+            //if (navigator.onLine) {
+            //  await startAllReplications(db, data.session.user.id);
+            //}
+
+            // Limpiamos la URL y entramos
+            return '/profile';
+          }
+          if (error) console.error('❌ Error al inyectar sesión:', error);
         }
-
-        if (error) console.error('❌ Error al inyectar sesión:', error);
       }
       return '/auth/login';
     }
 
     // Lógica normal para el resto de las rutas
-    const {
-      data: { session },
-    } = await myConfiguration.value.supabase.client.auth.getSession();
+    await forceSession();
+    const session = myConfiguration.value?.supabase.session;
     if (to.meta.requiresAuth && !session) {
       return '/auth/login';
     }
@@ -86,7 +86,7 @@ export default boot(({ app, router }) => {
   /**
    * 3. ESCUCHA DE EVENTOS (Maneja SIGNED_IN / SIGNED_OUT en tiempo real)
    */
-  myConfiguration.value.supabase.client.auth.onAuthStateChange(async (event, session) => {
+  myConfiguration.value?.supabase.client.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
       await registerAutomaticConnect(session);
       const db = prepareDb(session.user.id);

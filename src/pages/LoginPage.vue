@@ -8,100 +8,120 @@
 
     <q-card-section class="q-pa-xl">
       <q-form @submit="handleLogin" class="q-gutter-y-md">
-        <q-input v-model="email" label="Correo Electrónico" type="email" outlined autofocus
-          :rules="[(val) => !!val || 'El email es requerido']">
+        <q-input
+          v-model="email"
+          label="Correo Electrónico"
+          type="email"
+          outlined
+          autofocus
+          :rules="[(val) => !!val || 'El email es requerido']"
+        >
           <template v-slot:prepend>
             <q-icon name="email" />
           </template>
         </q-input>
 
-        <q-input v-model="password" label="Contraseña" :type="showPassword ? 'text' : 'password'" outlined
-          :rules="[(val) => !!val || 'La contraseña es requerida']">
+        <q-input
+          v-model="password"
+          label="Contraseña"
+          :type="showPassword ? 'text' : 'password'"
+          outlined
+          :rules="[(val) => !!val || 'La contraseña es requerida']"
+        >
           <template v-slot:prepend>
             <q-icon name="key" />
           </template>
           <template v-slot:append>
-            <q-icon :name="showPassword ? 'visibility' : 'visibility_off'" class="cursor-pointer"
-              @click="showPassword = !showPassword" />
+            <q-icon
+              :name="showPassword ? 'visibility' : 'visibility_off'"
+              class="cursor-pointer"
+              @click="showPassword = !showPassword"
+            />
           </template>
         </q-input>
 
         <div class="q-mt-lg">
-          <q-btn label="Iniciar Sesión" type="submit" color="primary" class="full-width" size="lg" :loading="loading" />
+          <q-btn
+            label="Iniciar Sesión"
+            type="submit"
+            color="primary"
+            class="full-width"
+            size="lg"
+            :loading="loading"
+          />
         </div>
       </q-form>
     </q-card-section>
 
     <q-card-actions align="center" class="q-pb-lg">
-      <q-btn flat no-caps color="primary" label="¿No tienes cuenta? Regístrate aquí" to="/auth/register" />
+      <q-btn
+        flat
+        no-caps
+        color="primary"
+        label="¿No tienes cuenta? Regístrate aquí"
+        to="/auth/register"
+      />
     </q-card-actions>
   </q-card>
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
-  import { useRouter } from 'vue-router';
-  import { useQuasar } from 'quasar';
-  import { useDatabase } from 'src/composables/useDb';
-  import { createSlapDBCallBack } from 'src/lib/slapdb';
-  import { useSupabase } from 'src/composables/useSupabase';
-  //import { useSession } from 'src/composables/useSession';
-  //import { startAllReplications } from 'src/services/database/replication';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
+import { useSupabase } from 'src/composables/useSupabase';
+//import { useSession } from 'src/composables/useSession';
+//import { startAllReplications } from 'src/services/database/replication';
 
-  const router = useRouter();
-  const { supabase: { value: supabase } } = useSupabase();
-  const $q = useQuasar();
-  const email = ref('');
-  const password = ref('');
-  const showPassword = ref(false);
-  const loading = ref(false);
+const router = useRouter();
+const { supabase } = useSupabase();
+const $q = useQuasar();
+const email = ref('');
+const password = ref('');
+const showPassword = ref(false);
+const loading = ref(false);
 
-  async function handleLogin() {
-    loading.value = true;
+async function handleLogin() {
+  loading.value = true;
 
-    try {
-      // 1. Autenticación con Supabase
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.value,
-        password: password.value,
-      });
+  try {
+    // 1. Autenticación con Supabase
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.value,
+      password: password.value,
+    });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      if (data.user) {
-        const {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          db: { value: db },
-        } = useDatabase({ name: `dbCSC_${data.user.id}`, version: 1 }, createSlapDBCallBack);
-
-        // 3. Iniciar replicación (Solo si estamos online)
-        if (window.navigator.onLine) {
-          // Nota: El servicio de replicación que definimos filtrará por userId
-          //await startAllReplications(db, data.user.id);
-        }
-
-        $q.notify({
-          type: 'positive',
-          message: 'Bienvenido',
-          position: 'top',
-        });
-
-        // 4. Redirigir al perfil
-        await router.push('/profile');
+    if (data.user) {
+      // 3. Iniciar replicación (Solo si estamos online)
+      if (window.navigator.onLine) {
+        // Nota: El servicio de replicación que definimos filtrará por userId
+        //await startAllReplications(db, data.user.id);
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error('Login Error:', err);
+
       $q.notify({
-        type: 'negative',
-        message: 'Error de acceso',
-        caption: err.message || 'Credenciales incorrectas',
+        type: 'positive',
+        message: 'Bienvenido',
         position: 'top',
       });
-    } finally {
-      loading.value = false;
+
+      // 4. Redirigir al perfil
+      await router.push('/profile');
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    console.error('Login Error:', err);
+    $q.notify({
+      type: 'negative',
+      message: 'Error de acceso',
+      caption: err.message || 'Credenciales incorrectas',
+      position: 'top',
+    });
+  } finally {
+    loading.value = false;
   }
+}
 </script>
 
 <style scoped>

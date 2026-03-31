@@ -12,6 +12,8 @@ import {
   type SupabaseClient,
 } from '@supabase/supabase-js';
 import { type IRealtimeSynchronize } from './SlapTypes';
+import { myConfiguration } from 'src/composables/useGlobalConfiguration';
+import { forceSession, useSession } from 'src/composables/useSession';
 
 //**********************Clase de base de datos generica
 export class SlapDB extends Dexie implements IRealtimeSynchronize {
@@ -20,6 +22,7 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
     [key: string]: {
       baseClass: Metaclass<typeof SlapBaseEntity>;
       localTableName: string;
+      syncronizing: boolean;
     };
   } = {}; //Diccionario para almacenar las entidades registradas y sus nombres de tabla locales
   private static channel: RealtimeChannel;
@@ -27,6 +30,7 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
     this.entities[classEntity._composeConfiguration.schemaInfo.entityName || localTableName] = {
       baseClass: classEntity,
       localTableName,
+      syncronizing: false,
     };
     console.log(
       `SlapDB.registerEntity--->PreRegistrando la clase de la entidad ${classEntity._composeConfiguration.schemaInfo.entityName} en la tabla: ${localTableName} de Dexie`,
@@ -65,7 +69,8 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
         }
       } else {
         console.log(`  - Ejecutando creación de tabla standard para ${entityName}`);
-        const syncTableName = (<typeof SlapBaseEntityWithReplycation>baseClass).syncTableName;
+        const syncTableName = (<typeof SlapBaseEntityWithReplycation>baseClass)
+          ._composeConfiguration.dbstate.syncTableName;
         // La llamada rpc llevará el token JWT del usuario logueado automáticamente
 
         const { data, error } = await supabase.rpc('admin_provision_slap_table', {
@@ -91,18 +96,26 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
     // Retorna el constructor de la instancia actual tipado correctamente
     return this.constructor as typeof SlapDB;
   }
-
-  constructor(dbName: string, version: number = 1, withAutoSyncronize = true) {
+  _supabase!: SupabaseClient;
+  constructor(
+    dbName: string,
+    version: number = 1,
+    supabase: SupabaseClient,
+    withAutoSyncronize = true,
+  ) {
     super(dbName);
     try {
-      this.version(version).stores({});
+      this._supabase = supabase;
+      //this.version(version).stores({});
       //Registra todas las clases que se han definido.
       const entities = this.staticSelf.entities;
+      const tablesReg: { [key: string]: any } = { _sync_meta: 'id,checkpoint,tid' };
+      for (const key of Object.keys(entities)) {
+        tablesReg[key] = entities[key]?.baseClass.schema;
+      }
 
       //Registra la tabla local de control de sincronización
-      this.version(this.verno || 0).stores({
-        ['_sync_meta']: 'id,checkpoint,tid',
-      });
+      this.version(this.verno || 1).stores(tablesReg);
 
       Object.keys(entities).forEach((key) => {
         if (entities[key]) {
@@ -110,6 +123,7 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
           this.registerOneEntity(entities[key]);
         }
       });
+      void this.test();
     } catch (error) {
       console.log('Error en el constructor de SlapDB:', error);
     }
@@ -124,20 +138,12 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
     localTableName: string;
   }) {
     try {
-      const currentVersion = this.verno || 0;
       if (
         baseClass._configuration.dbstate.registrable &&
         !baseClass._configuration.dbstate.registered
       ) {
         baseClass._configuration.dbstate.registered = true; //Indicamos que esta clase ya se ha registrado en la base de datos
-        // Definimos el store
-        this.version(currentVersion).stores({
-          [localTableName]: baseClass.schema,
-        });
-        // Mapeamos la tabla a la clase
-        // Esto hace que db[tableName] devuelva instancias de entityClass
-        //this[localTableName].mapToClass(baseClass);
-        registerEntity(baseClass, this[localTableName] as Table<any, any>);
+        registerEntity(baseClass, this);
       } else {
         console.log(
           `La clase de la entidad ${baseClass._composeConfiguration.schemaInfo.entityName} ya ha sido registrada o no es registrable. (registerOneEntity)`,
@@ -160,89 +166,111 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
     synClass: SlapBaseEntityWithReplycation,
     batchSize: number = import.meta.env.VITE_SUPABASE_SYNCHRO_BATCH || 20,
   ) {
-    if (synClass && isSubclass(synClass, SlapBaseEntityWithReplycation)) {
-      const entityKeyColumn =
-        ((synClass._composeConfiguration.schemaInfo.keyColumns?.length ?? 0) > 0
-          ? synClass._composeConfiguration.schemaInfo.keyColumns?.[0]
-          : 'id') ?? 'id'; //Obtenemos la columna clave de la entidad, por defecto 'id'
+    const entityName = synClass._composeConfiguration.schemaInfo.entityName;
+    if (
+      this.staticSelf.entities[entityName] &&
+      !this.staticSelf.entities[entityName].syncronizing
+    ) {
+      try {
+        this.staticSelf.entities[entityName].syncronizing = true;
+        if (synClass && isSubclass(synClass, SlapBaseEntityWithReplycation)) {
+          const entityKeyColumn =
+            ((synClass._composeConfiguration.schemaInfo.keyColumns?.length ?? 0) > 0
+              ? synClass._composeConfiguration.schemaInfo.keyColumns?.[0]
+              : 'id') ?? 'id'; //Obtenemos la columna clave de la entidad, por defecto 'id'
 
-      const syncTableName = synClass._composeConfiguration.dbstate.syncTableName; //Obtenemos el nombre de la tabla remota desde la clase
-      const localTableName =
-        this.staticSelf.entities[synClass._composeConfiguration.schemaInfo.entityName]
-          ?.localTableName ?? ''; //Obtenemos el nombre de la tabla local desde el registro de entidades
-      const syncMeta = await this.table('_sync_meta').get(localTableName);
-      const lastCp = syncMeta?.checkpoint || 0;
+          const syncTableName = synClass._composeConfiguration.dbstate.syncTableName; //Obtenemos el nombre de la tabla remota desde la clase
+          const localTableName = this.staticSelf.entities[entityName]?.localTableName ?? ''; //Obtenemos el nombre de la tabla local desde el registro de entidades
+          const syncMeta = await this.table('_sync_meta').get(localTableName);
+          const lastCp = syncMeta?.checkpoint || 0;
 
-      // 1. Obtener registros sucios (created, updated, deleted)
-      const dirtyItems = (
-        await this.table(localTableName)
-          .orderBy('updatedAt') //Ordenamos por fecha para enviar primero los cambios más antiguos
-          .filter(
-            (item) => !item.synchronized && ['created', 'updated', 'deleted'].includes(item.status),
-          )
-          .limit(batchSize)
-          .toArray()
-      ).map((item) => this.mapToServerFormat(item, synClass));
+          // 1. Obtener registros sucios (created, updated, deleted)
+          const dirtyItems = (
+            await this.table(localTableName)
+              .orderBy('updatedAt') //Ordenamos por fecha para enviar primero los cambios más antiguos
+              .filter(
+                (item) =>
+                  !item.synchronized && ['created', 'updated', 'deleted'].includes(item.status),
+              )
+              .limit(batchSize)
+              .toArray()
+          ).map((item) => this.mapToServerFormat(item, synClass));
 
-      // 2. Ejecuta en el servidor
-      const { data, error } = await supabase.rpc('sync_table_data', {
-        p_tablename: syncTableName,
-        p_data: dirtyItems,
-        p_last_checkpoint: lastCp,
-        p_force_update: false,
-      });
-
-      //3.Si hay errores
-      if (error) throw error;
-
-      //4.actualiza los datos que vienen del servidor.
-      await this.transaction(
-        'rw',
-        [this.table(localTableName), this.table('_sync_meta')],
-        async (tx) => {
-          (tx as unknown as any).additionalData = {
-            syncTableName,
-            syncClass: synClass,
-            newCheckPoint: data.new_checkpoint,
-            synchronizating: true,
-          };
-          // 4.1. Aplicar cambios remotos (PULL) - Operación Masiva
-          if (data.changes && data.changes.length > 0) {
-            const changesToPut = data.changes.map((remoteChange: any) => ({
-              ...remoteChange,
-              synchronized: true,
-            }));
-
-            // bulkPut es mucho más robusto que un bucle con put individual
-            await tx.table(localTableName).bulkPut(changesToPut);
-          }
-
-          // 5. Confirmación de subida (PUSH)
-          const successIds = dirtyItems
-            .filter((item) => !data.errors.some((e: { pk: any }) => e.pk == item[entityKeyColumn])) // Corregido el acceso a item
-            .map((item: any) => item[entityKeyColumn]);
-
-          if (successIds.length > 0) {
-            // USAR EL NOMBRE REAL DE LA COLUMNA (entityKeyColumn) en lugar de ':id'
-            await tx.table(localTableName).where(entityKeyColumn).anyOf(successIds).modify({
-              synchronized: true,
-              lastCheckPoint: data.new_checkpoint,
-            });
-          }
-
-          // 6. Actualizar checkpoint global
-          await tx.table('_sync_meta').put({
-            id: localTableName,
-            checkpoint: data.new_checkpoint,
-            tid: data.iod,
+          // 2. Ejecuta en el servidor
+          const { data, error } = await supabase.rpc('sync_table_data', {
+            p_tablename: syncTableName,
+            p_data: dirtyItems,
+            p_last_checkpoint: lastCp,
+            p_force_update: false,
           });
+
+          //3.Si hay errores
+          if (error) throw error;
+
+          //4.actualiza los datos que vienen del servidor.
+          await this.transaction(
+            'rw',
+            [this.table(localTableName), this.table('_sync_meta')],
+            async (tx) => {
+              (tx as unknown as any).additionalData = {
+                syncTableName,
+                syncClass: synClass,
+                newCheckPoint: data.new_checkpoint,
+                synchronizating: true,
+              };
+              // 4.1. Aplicar cambios remotos (PULL) - Operación Masiva
+              if (data.changes && data.changes.length > 0) {
+                const changesToPut = data.changes.map((remoteChange: any) => ({
+                  ...remoteChange,
+                  synchronized: true,
+                }));
+
+                // bulkPut es mucho más robusto que un bucle con put individual
+                await tx.table(localTableName).bulkPut(changesToPut);
+              }
+
+              // 5. Confirmación de subida (PUSH)
+              const successIds = dirtyItems
+                .filter(
+                  (item) => !data.errors.some((e: { pk: any }) => e.pk == item[entityKeyColumn]),
+                ) // Corregido el acceso a item
+                .map((item: any) => item[entityKeyColumn]);
+
+              if (successIds.length > 0) {
+                // USAR EL NOMBRE REAL DE LA COLUMNA (entityKeyColumn) en lugar de ':id'
+                await tx.table(localTableName).where(entityKeyColumn).anyOf(successIds).modify({
+                  synchronized: true,
+                  lastCheckPoint: data.new_checkpoint,
+                });
+              }
+
+              // 6. Actualizar checkpoint global
+              await tx.table('_sync_meta').put({
+                id: localTableName,
+                checkpoint: data.new_checkpoint,
+                tid: data.iod,
+              });
+            },
+          );
+          return data.errors;
+        }
+      } catch (error) {
+        console.log('Error en syncTable', error);
+      } finally {
+        this.staticSelf.entities[entityName].syncronizing = false;
+      }
+    } else {
+      //Reintenta hasta que la actual sincronización de tabla termina....
+      setTimeout(
+        () => {
+          void this.syncTable(supabase, synClass, batchSize);
         },
+        import.meta.env.VITE_SUPABASE_IMMEDIATE_MS || 300,
       );
-      return data.errors;
     }
   }
 
-  async runFullSync(supabase: SupabaseClient<any, any, 'public', any, any>) {
+  async runFullSync() {
     // Verificamos si realmente hay red antes de intentar
     if (!navigator.onLine) {
       console.warn('⚠️ No hay conexión a internet. No se puede sincronizar.');
@@ -257,7 +285,7 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
 
     for (const synClass of synClasses) {
       try {
-        const errors = await this.syncTable(supabase, synClass as any);
+        const errors = await this.syncTable(this._supabase, synClass as any);
 
         if (errors && errors.length > 0) {
           console.warn(
@@ -276,20 +304,20 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
     // Reintenta la sincronización después de un tiempo
     setTimeout(
       () => {
-        void this.runFullSync(supabase);
+        void this.runFullSync();
       },
       import.meta.env.VITE_SUPABASE_MS_RETRY || 1000,
     );
   }
 
-  async realtimeSyncSetup(supabase: SupabaseClient<any, any, 'public', any, any>) {
+  async realtimeSyncSetup() {
     if (this.staticSelf.channel) {
       console.log(
         '⚠️ Realtime ya está configurado para esta base de datos. Evitando configuración duplicada.',
       );
-      await supabase.removeChannel(this.staticSelf.channel);
+      await this._supabase.removeChannel(this.staticSelf.channel);
     }
-    this.staticSelf.channel = supabase.channel(`slbSync`, {
+    this.staticSelf.channel = this._supabase.channel(`slbSync`, {
       config: {
         broadcast: {
           self: true, // <--- ESTO permite que el emisor reciba su propio mensaje
@@ -305,14 +333,14 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
         },
         (payload) => {
           // Si recibimos un cambio y no somos nosotros (basado en el checkpoint)
-          void this.realtimeHandle(supabase, payload); //Ejecutamos la promesa sin esperar su resultado para no bloquear el hilo de eventos
+          void this.realtimeHandle(payload); //Ejecutamos la promesa sin esperar su resultado para no bloquear el hilo de eventos
         },
       )
       .subscribe((status) => {
         if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
           console.log(`✅ Conectado a Realtime para toda la base de datos`);
           // Al conectar o reconectar el socket, disparamos sync para recuperar lo perdido en el downtime
-          void this.runFullSync(supabase); //Ejecutamos la promesa sin esperar su resultado para no bloquear el hilo de eventos
+          void this.runFullSync(); //Ejecutamos la promesa sin esperar su resultado para no bloquear el hilo de eventos
         }
 
         if (status === REALTIME_SUBSCRIBE_STATES.CLOSED) {
@@ -321,7 +349,7 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
       });
   }
 
-  async realtimeHandle(supabase: SupabaseClient<any, any, 'public', any, any>, payload: unknown) {
+  async realtimeHandle(payload: unknown) {
     const t = (payload as any).payload.t;
     const c = (payload as any).payload.c;
     const table_data = (this._sync_meta as Table).where('tid').equals(t);
@@ -330,19 +358,42 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
     if (c > primerRegistro?.checkpoint) {
       //syncronizamos sólo aquellas tablas que son avisadas de un checkpoint mayor. Esto evita sincronizaciones innecesarias y mejora el rendimiento.
       await this.syncTable(
-        supabase,
+        this._supabase,
         this.staticSelf.entities[primerRegistro.id]
           ?.baseClass as unknown as SlapBaseEntityWithReplycation,
       );
     }
   }
 
-  async handleOnline(supabase: SupabaseClient<any, any, 'public', any, any>) {
-    await this.runFullSync(supabase);
-    await this.realtimeSyncSetup(supabase);
+  async handleOnline() {
+    await this.runFullSync();
+    await this.realtimeSyncSetup();
   }
   handleOffline() {
     console.warn('⚠️ Sin conexión a internet. Trabajando en modo local.');
+  }
+  async test() {
+    await forceSession();
+    const userId = useSession().session.value?.user.id;
+    if (this.staticSelf.entities.Grupo && this.staticSelf.entities.UsuarioGrupo) {
+      const grupo = new this.staticSelf.entities.Grupo.baseClass();
+      grupo.nombre = 'Grupo 2';
+      const usuario = grupo.usuarios.create();
+      usuario.perfil = userId;
+      //   // usuario.perfil = myConfiguration.configuration.value.supabase.session?.user.id;
+      await grupo.save();
+      //  grupo.nombre = 'Grupo 1';
+      //  await grupo.save();
+      const usuarioGrupo = new this.staticSelf.entities.UsuarioGrupo.baseClass();
+      usuarioGrupo.grupo = grupo;
+      usuarioGrupo.perfil = userId;
+      await usuarioGrupo.save();
+      console.log('Grupo:', (await usuarioGrupo.grupo).value);
+      console.log('Perfil:', (await usuarioGrupo.perfil).value);
+      console.log('Los usuarios ahora son:', grupo.usuarios);
+    }
+    //console.log('Pasando por el testo de SlapDb');
+    //console.log(await this.table('Perfil').get('f08c6f80-f87d-41b6-b62e-1d4ada9699bb'));
   }
 }
 
@@ -352,6 +403,11 @@ export const createSlapDBCallBack = (config: { [key: string]: any }) => {
     console.log('El nombre de la base de datos es obligatorio (createSlapDBCallBack)');
     return null;
   } else {
-    return new SlapDB(config.name, config.version || 1, config.withAutoSyncronize || true);
+    return new SlapDB(
+      config.name,
+      config.version || 1,
+      config.supabase,
+      config.withAutoSyncronize || true,
+    );
   }
 };
