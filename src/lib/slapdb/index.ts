@@ -12,6 +12,9 @@ import {
   type SupabaseClient,
 } from '@supabase/supabase-js';
 import { type IRealtimeSynchronize } from './SlapTypes';
+import { forceSession, useSession } from 'src/composables/useSession';
+import type { EGrupo } from 'src/services/database/entities/EGrupo';
+import type { EMenu } from 'src/services/database/entities/EMenu';
 //import { myConfiguration } from 'src/composables/useGlobalConfiguration';
 //import { forceSession, useSession } from 'src/composables/useSession';
 
@@ -124,6 +127,9 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
         }
       });
       void this.test();
+      if (import.meta.env.VITE_STARTUPDATA === '1') {
+        void this.startUpData();
+      }
     } catch (error) {
       console.log('Error en el constructor de SlapDB:', error);
     }
@@ -371,6 +377,82 @@ export class SlapDB extends Dexie implements IRealtimeSynchronize {
   }
   handleOffline() {
     console.warn('⚠️ Sin conexión a internet. Trabajando en modo local.');
+  }
+  async startUpData() {
+    await forceSession();
+    const userId = useSession().session.value?.user.id;
+    if (import.meta.env.VITE_STARTUPGRUPO === '1') {
+      if (this.staticSelf.entities.Grupo) {
+        const grupoUsuario: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoUsuario.nombre = 'Usuarios';
+        await grupoUsuario.save();
+        const grupoSocial: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoSocial.nombre = 'Caritas Social';
+        await grupoSocial.save();
+        const grupoCaritas: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoCaritas.nombre = 'Caritas';
+        await grupoCaritas.save();
+        const grupoAdmin: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoAdmin.nombre = 'Administradores';
+        await grupoAdmin.save();
+        const grupoRopa: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoRopa.nombre = 'Ropa';
+        await grupoRopa.save();
+        const grupoEntrevistadores: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoEntrevistadores.nombre = 'Entrevistadores';
+        await grupoEntrevistadores.save();
+        const grupoNocheC: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoNocheC.nombre = 'Noche de la Caridad';
+        await grupoNocheC.save();
+        const grupoFeria: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoFeria.nombre = 'Feria Americana';
+        await grupoFeria.save();
+        const grupoSecretaria: EGrupo =
+          new this.staticSelf.entities.Grupo.baseClass() as unknown as EGrupo;
+        grupoSecretaria.nombre = 'Secretaría';
+        await grupoSecretaria.save();
+      }
+    }
+    if (import.meta.env.VITE_STARTUPMENU === '1') {
+      if (this.staticSelf.entities.Menu && this.staticSelf.entities.Grupo) {
+        //Menus general usuarios
+        const grupoUsuarios = await this.staticSelf.entities.Grupo.baseClass
+          .where('nombre')
+          ?.equals('Usuarios')
+          .first();
+        const menuUsuarios: EMenu = new this.staticSelf.entities.Menu.baseClass() as EMenu;
+        menuUsuarios
+          .assignData({
+            title: 'Cuenta del Usuario',
+            caption: 'Administre su cuenta de su usuario',
+            icon: 'manage_accounts',
+          })
+          .grupos.create().grupo = grupoUsuarios;
+        await menuUsuarios.save();
+        //Menus Perfiles de usuario
+        const menuProfile: EMenu = new this.staticSelf.entities.Menu.baseClass() as EMenu;
+        menuProfile
+          .assignData({
+            title: 'Perfil',
+            caption: 'Ver y editar su Perfil',
+            icon: 'account_box',
+            to: 'profile',
+            menuMadre: menuUsuarios.id || '',
+          })
+          .grupos.create().grupo = grupoUsuarios;
+        await menuProfile.save();
+      }
+    }
+    if (import.meta.env.VITE_STARTUPGRUPOMENU === '1') {
+    }
   }
   async test() {
     /*  await forceSession();

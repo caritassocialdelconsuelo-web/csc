@@ -85,42 +85,69 @@ const linksList: EssentialLinkProps[] = [
     caption: 'quasar.dev',
     icon: 'school',
     link: 'https://quasar.dev',
+    target: '_blank',
   },
   {
     title: 'Github',
     caption: 'github.com/quasarframework',
     icon: 'code',
     link: 'https://github.com/quasarframework',
+    target: '_blank',
   },
   {
     title: 'Discord Chat Channel',
     caption: 'chat.quasar.dev',
     icon: 'chat',
     link: 'https://chat.quasar.dev',
+    target: '_blank',
   },
   {
     title: 'Forum',
     caption: 'forum.quasar.dev',
     icon: 'record_voice_over',
     link: 'https://forum.quasar.dev',
+    target: '_blank',
   },
   {
     title: 'Twitter',
     caption: '@quasarframework',
     icon: 'rss_feed',
     link: 'https://twitter.quasar.dev',
+    target: '_blank',
   },
   {
     title: 'Facebook',
     caption: '@QuasarFramework',
     icon: 'public',
     link: 'https://facebook.quasar.dev',
+    target: '_blank',
   },
   {
     title: 'Quasar Awesome',
     caption: 'Community Quasar projects',
     icon: 'favorite',
     link: 'https://awesome.quasar.dev',
+    target: '_blank',
+  },
+  {
+    title: 'Datos del usuario',
+    caption: 'Datos de la cuenta y el usuario',
+    icon: 'manage_accounts',
+    subElementos: [
+      {
+        title: 'Datos del usuario',
+        caption: 'Datos de la cuenta y el usuario',
+        icon: 'manage_accounts',
+        subElementos: [
+          {
+            title: 'Mi Perfil',
+            caption: 'Modificar y ver mi perfil',
+            icon: 'manage_accounts',
+            to: 'profile',
+          },
+        ],
+      },
+    ],
   },
 ];
 

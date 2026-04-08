@@ -28,7 +28,7 @@ export class References<T extends SlapBaseEntity> extends Array<T> {
           myClass.table
             .where(
               this._field.options?.referenceFieldName ||
-              `id${(this._thisMain.constructor as unknown as typeof SlapBaseEntity)._composeConfiguration.schemaInfo.entityName}`,
+                `id${(this._thisMain.constructor as unknown as typeof SlapBaseEntity)._composeConfiguration.schemaInfo.entityName}`,
             )
             .equals(params.id || '')
             .toArray(),
@@ -92,11 +92,9 @@ export class References<T extends SlapBaseEntity> extends Array<T> {
     }
   }
   create() {
-    if (this._field.funcToChildClass) {
-      const myClass = this._field.funcToChildClass();
-      const obj = new myClass();
-      this.push(obj as unknown as any);
-      return obj;
-    }
+    const myClass = this._field.funcToChildClass ? this._field.funcToChildClass() : SlapBaseEntity;
+    const obj = new myClass() as T;
+    this.push(obj as unknown as any);
+    return obj;
   }
 }

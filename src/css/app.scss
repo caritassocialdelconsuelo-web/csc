@@ -1,1 +1,10 @@
 // app global css in SCSS form
+.active-menu-style {
+  color: white; /* Color texto en ambos modos */
+  background: var(--q-bgmenuselectgradiente); /* Usa el color primario de Quasar */
+  font-weight: bold;
+}
+body.body--dark .active-menu-style {
+  background: var(--q-bgmenuselectgradiente);
+  opacity: 0.9; /* Ligeramente más suave en dark mode */
+}

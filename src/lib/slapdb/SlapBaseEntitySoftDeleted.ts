@@ -50,10 +50,22 @@ export class SlapBaseEntitySoftDeleted extends SlapBaseEntity {
       if (!this.id) {
         throw new Error('No se puede eliminar una instancia que no tiene ID (no existe en DB).');
       }
-      await super.update({
-        status: this.getThisClass().DELETED_ESTADO, //Borra porque le cambia el estado
-        deletedAt: this.getThisClass().getAt(),
-      } as Partial<this>);
+      const table = this.staticSelf.table;
+      const { funcCascade, tablesTrans } = this.cascadeDelete();
+      const { funcCheck } = this.integrityDeleteCheck(
+        (x) => (x as SlapBaseEntitySoftDeleted).status !== this.getThisClass().DELETED_ESTADO,
+      );
+      await table.db.transaction('rw', tablesTrans, async () => {
+        await funcCascade();
+        await super.update({
+          status: this.getThisClass().DELETED_ESTADO, //Borra porque le cambia el estado
+          deletedAt: this.getThisClass().getAt(),
+        } as Partial<this>);
+        const resultado = await funcCheck();
+        if (resultado.length > 0) {
+          throw new Error(`Integrity delete check failed:${JSON.stringify(resultado)}`);
+        }
+      });
     } catch (error) {
       console.log(
         `Error en delete() de la clase de la entidad ${this.getThisClass().entityName}:`,

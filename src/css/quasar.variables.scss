@@ -23,3 +23,16 @@ $positive: #21ba45;
 $negative: #c10015;
 $info: #31ccec;
 $warning: #f2c037;
+
+$bgmenuselect: #060b47;
+$bgmenuselectgradiente: linear-gradient(
+  160deg,
+  rgba(48, 54, 145, 1) 0%,
+  rgba(84, 139, 227, 0.8) 86%,
+  rgba(167, 211, 250, 0.7) 100%
+);
+
+:root {
+  --q-bgmenuselect: #{$bgmenuselect};
+  --q-bgmenuselectgradiente: #{$bgmenuselectgradiente};
+}

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { liveQuery, Transaction, Observable, IndexableType, Table } from 'dexie';
+import { liveQuery, Transaction, Observable, IndexableType, Table, Collection } from 'dexie';
 import { BehaviorSubject, debounceTime, distinctUntilChanged, switchMap, from } from 'rxjs';
 import { Column } from './decorators';
 import { IColumnDescriptor, IConfigSlapEntity, TDataSlapEntity } from './SlapTypes';
@@ -445,6 +445,11 @@ export class SlapBaseEntity extends Destructibles {
 
   // --- MÉTODOS DE INSTANCIA (Dentro de SlapBaseEntity) ---
 
+  assignData(data: Partial<this>) {
+    // Object.assign combina los datos actuales con los nuevos
+    Object.assign(this, data);
+    return this;
+  }
   getObjectData() {
     return this.staticSelf.getStaticObjectData(this);
   }
@@ -527,30 +532,78 @@ export class SlapBaseEntity extends Destructibles {
   /**
    * Elimina este registro específico de la base de datos.
    */
+  protected cascadeDelete() {
+    const table = this.staticSelf.table;
+    const refColumns = this.staticSelf._composeConfiguration.schemaInfo.referenceColumns;
+    const tablesTrans: Table[] = [table]; //Tabla principal que se va a borrar, siempre debe estar incluida en la transacción.
+    const cascadeDeletes: { references: SlapBaseEntity[] }[] = [];
+    for (const col in refColumns) {
+      if (refColumns[col]?.options?.cascadeDelete && refColumns[col]?.funcToChildClass) {
+        tablesTrans.push(refColumns[col].funcToChildClass().table);
+        cascadeDeletes.push({
+          references: this[col],
+        });
+      }
+    } //Genera un array de las tablas que intervienen en la transacción de borrado.
+    return {
+      funcCascade: async () => {
+        for (const deletes of cascadeDeletes) {
+          //Campos que son tablas relacionadas con esta entidad y que tienen cascadeDelete en true, se borran automáticamente al borrar esta entidad, para evitar datos huérfanos.
+          for (const reference of deletes.references) {
+            //Cada fila dentro de la tabla relacionada que tiene cascadeDelete en true, se borra automáticamente al borrar esta entidad, para evitar datos huérfanos.
+            await reference.delete(); //Borra cada referencia relacionada con esta entidad, si es que existen, antes de borrar esta entidad.
+          }
+        }
+      },
+      tablesTrans: tablesTrans,
+    };
+  }
+  protected integrityDeleteCheck<T>(extraCondition: ((x: T) => boolean) | null = null) {
+    const table = this.staticSelf.table;
+    const refColumns = this.staticSelf._composeConfiguration.schemaInfo.referenceColumns;
+    const tablesTrans: Table[] = [table]; //Tabla principal que se va a borrar, siempre debe estar incluida en la transacción.
+    return {
+      funcCheck: async () => {
+        const result = [];
+        for (const col in refColumns) {
+          if (refColumns[col]?.options?.referenceFieldName && refColumns[col]?.funcToChildClass) {
+            const tableChild = refColumns[col].funcToChildClass().table;
+            if (
+              (
+                await tableChild
+                  .where(refColumns[col].options.referenceFieldName)
+                  .equals(this.id!)
+                  .and(extraCondition !== null ? extraCondition : () => true)
+                  .toArray()
+              ).length > 0
+            ) {
+              result.push({
+                error: `Se ha detectado que existe un error eliminando este registro en la tabla ${table.name} con id: ${this.id} porque hay una referencia en la tabla ${tableChild.name}`,
+                tableChild,
+              });
+            }
+          }
+        }
+        return result;
+      }, //Genera un array de las tablas que tienen registros vinculados.
+    };
+  }
+
   async delete(): Promise<void> {
     try {
       if (!this.id) {
         throw new Error('No se puede eliminar una instancia que no tiene ID (no existe en DB).');
       }
       const table = this.staticSelf.table;
-      const refColumns = this.staticSelf._composeConfiguration.schemaInfo.referenceColumns;
-      const tablesTrans: Table[] = [table]; //Tabla principal que se va a borrar, siempre debe estar incluida en la transacción.
-      const cascadeDeletes: { references: SlapBaseEntity[] }[] = [];
-      for (const col in refColumns) {
-        if (refColumns[col]?.options?.cascadeDelete && refColumns[col]?.funcToChildClass) {
-          tablesTrans.push(refColumns[col].funcToChildClass().table);
-          cascadeDeletes.push({
-            references: this[col],
-          });
-        }
-      }//Genera un array de las tablas que intervienen en la transacción de borrado.
+      const { funcCascade, tablesTrans } = this.cascadeDelete();
+      const { funcCheck } = this.integrityDeleteCheck();
       await table.db.transaction('rw', tablesTrans, async () => {
-        for (const deletes of cascadeDeletes) { //Campos que son tablas relacionadas con esta entidad y que tienen cascadeDelete en true, se borran automáticamente al borrar esta entidad, para evitar datos huérfanos.
-          for (const reference of deletes.references) {//Cada fila dentro de la tabla relacionada que tiene cascadeDelete en true, se borra automáticamente al borrar esta entidad, para evitar datos huérfanos.
-            await reference.delete(); //Borra cada referencia relacionada con esta entidad, si es que existen, antes de borrar esta entidad.
-          }
-        }
+        await funcCascade();
         await table.delete(this.id!); //Borra esta entidad. El orden es importante, primero se borran las referencias relacionadas y luego esta entidad, para evitar errores de claves foráneas.
+        const resultado = await funcCheck();
+        if (resultado.length > 0) {
+          throw new Error(`Integrity delete check failed:${JSON.stringify(resultado)}`);
+        }
       });
     } catch (error) {
       console.log(
